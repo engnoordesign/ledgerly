@@ -1,0 +1,12 @@
+# Your own exports contain real financial data. Never commit them.
+ledgerly-backup-*.json
+ledgerly-all-*.csv
+ledgerly-transactions-*.csv
+
+# Tooling and OS noise
+node_modules/
+.claude/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
