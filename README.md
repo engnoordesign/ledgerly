@@ -66,3 +66,7 @@ node tools/check-i18n.js      # every string the app can show has an Arabic tran
 
 Copy `js/lang-ar.js` to `js/lang-xx.js`, translate the values, load it in `index.html`, and add the
 language to the switcher in `js/views/settings.js` and `js/store.js`. `check-i18n.js` lists anything missing.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
