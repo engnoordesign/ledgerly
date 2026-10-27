@@ -52,6 +52,8 @@ const SettingsView = (() => {
             <button class="btn danger ghost" data-act="data:reset">${UI.icon('trash', 16)}${t('Erase everything')}</button>
           </div>`, { cls: 's5' })}
 
+        ${UI.card(t('About'), h`<div class="about">${UI.logo(56)}<div><b>Ledgerly</b><span class="muted">${t('Version {v}', { v: K.VERSION })}</span><span class="muted small">${t('Your data stays on this device.')}</span></div></div>`, { cls: 's12' })}
+
         ${UI.card(t('Shortcuts'), h`<ul class="kbd-list">
           <li><kbd>N</kbd><span>${t('New transaction')}</span></li><li><kbd>/</kbd><span>${t('Search transactions')}</span></li>
           <li><kbd>Esc</kbd><span>${t('Close a dialog')}</span></li><li><kbd>Enter</kbd><span>${t('Save a form')}</span></li></ul>`, { cls: 's12' })}
@@ -148,7 +150,7 @@ const SettingsView = (() => {
     const ctl = UI.modal({
       title: t('Welcome to Ledgerly'), size: 'lg', sticky: true,
       body: h`<form id="obf" novalidate data-submit="ob:start">
-        <p class="muted lead">${t('Track income and spending, plan with proven budgets, and watch your savings grow. Your data stays on this device.')}</p>
+        <div class="welcome">${UI.logo(64)}<p class="muted lead">${t('Track income and spending, plan with proven budgets, and watch your savings grow. Your data stays on this device.')}</p></div>
         <div class="row2">
           <div class="field"><label>${t('Language')}</label>${UI.seg('ob:lang', [['en', 'English'], ['ar', 'العربية']], s.lang)}</div>
           <div class="field"><label>${t('Appearance')}</label>${UI.seg('ob:theme', [['light', t('Light')], ['dark', t('Dark')], ['system', t('Auto')]], s.theme)}</div>

@@ -16,6 +16,7 @@ const K = {
   FREQ: { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', quarterly: 'Every 3 months', yearly: 'Yearly' },
   BUCKETS: { needs: 'Needs', wants: 'Wants' },
   CAT_ICONS: ['home', 'cart', 'car', 'zap', 'heart', 'shield', 'phone', 'book', 'utensils', 'film', 'bag', 'repeat', 'plane', 'gift', 'coffee', 'briefcase', 'banknote', 'trending-up', 'landmark', 'tag'],
+  VERSION: '1.0.0',
   KEY: 'ledgerly:v1',
   KEY_SNAP: 'ledgerly:v1:snapshot',
   KEY_THEME: 'ledgerly:theme',

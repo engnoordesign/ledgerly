@@ -10,7 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23256abf'/%3E%3Cpath d='M10 8v15h13' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 18l3.5-3.5 2.5 2 4-5' fill='none' stroke='%2373e0b2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="assets/ledgerly.ico" sizes="any">
+<link rel="icon" href="assets/ledgerly.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/ledgerly.png">
 <link rel="stylesheet" href="css/styles.css">
 <script>
   /* apply saved theme and language before first paint to avoid a flash */
@@ -24,7 +26,8 @@
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#256abf"/><path d="M10 8v15h13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 18l3.5-3.5 2.5 2 4-5" fill="none" stroke="#73e0b2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <defs><linearGradient id="logo-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f78cf"/><stop offset="1" stop-color="#1f5cae"/></linearGradient></defs>
+  <symbol id="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="url(#logo-g)"/><path d="M10 8v15h13" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 18l3.5-3.5 2.5 2 4-5" fill="none" stroke="#73e0b2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
   <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
   <symbol id="i-pie" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.6A9 9 0 0 1 20.4 9H15z"/></symbol>

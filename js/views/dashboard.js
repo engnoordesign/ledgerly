@@ -14,7 +14,7 @@ const DashboardView = (() => {
     const mk = App.month, set = S.state.settings;
     if (!S.state.transactions.length) {
       return h`${UI.pageHead({ title: greeting(), sub: t('Let’s get your money organised.') })}
-        ${UI.empty({ icon: 'wallet', title: t('No transactions yet'), text: t('Add your first income or expense, or explore the app with a year of sample data.'),
+        ${UI.empty({ icon: 'logo', title: t('No transactions yet'), text: t('Add your first income or expense, or explore the app with a year of sample data.'),
           action: h`<div class="row-actions"><button class="btn primary" data-act="tx:new">${UI.icon('plus', 16)}${t('Add transaction')}</button><button class="btn" data-act="data:demo">${t('Load sample data')}</button></div>` })}`;
     }
     const isCur = mk === U.curMonth(), pk = U.addMonthKey(mk, -1), cur = Q.month(mk), br = Q.budgetRows(mk), tot = br.totals;

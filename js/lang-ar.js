@@ -208,7 +208,7 @@ I18N.dicts.ar = {
   "Choose the account these rows belong to.": "اختر الحساب الذي تنتمي إليه هذه الصفوف.", "Row {n}: {why}": "الصف {n}: {why}", "unreadable amount": "مبلغ غير مقروء", "unreadable date": "تاريخ غير مقروء",
 
   /* misc ui */
-  "Add transaction": "إضافة معاملة", "Last entry": "آخر قيد", "vs the same days of the previous period": "مقارنةً بالأيام نفسها من الفترة السابقة", "Up to today": "حتى اليوم", "vs same point last month": "مقارنةً بالنقطة نفسها من الشهر الماضي", "{month} so far": "{month} حتى الآن", "vs previous period": "مقارنةً بالفترة السابقة",
+  "Add transaction": "إضافة معاملة", "About": "حول التطبيق", "Version {v}": "الإصدار {v}", "Your data stays on this device.": "تبقى بياناتك على هذا الجهاز.", "Last entry": "آخر قيد", "vs the same days of the previous period": "مقارنةً بالأيام نفسها من الفترة السابقة", "Up to today": "حتى اليوم", "vs same point last month": "مقارنةً بالنقطة نفسها من الشهر الماضي", "{month} so far": "{month} حتى الآن", "vs previous period": "مقارنةً بالفترة السابقة",
   "Add some income and expenses and the statistics appear here.": "أضف بعض الدخل والمصروفات لتظهر الإحصائيات هنا.",
 
   /* demo & built-in names */

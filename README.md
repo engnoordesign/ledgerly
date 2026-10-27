@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/ledgerly.png" alt="Ledgerly logo" width="96"></p>
+
 # Ledgerly
 
 A private budget and accounting app in English and Arabic (right-to-left). Track income, spending and

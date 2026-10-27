@@ -17,6 +17,8 @@ const UI = (() => {
   const { h, esc, money } = U;
 
   UI.icon = (name, size = 18, cls = '') => U.raw(`<svg class="i ${cls}" width="${size}" height="${size}" aria-hidden="true" focusable="false"><use href="#i-${name}"/></svg>`);
+  /** The Ledgerly logo (the #logo symbol in index.html). */
+  UI.logo = (size = 32) => U.raw(`<svg class="logo" width="${size}" height="${size}" aria-hidden="true" focusable="false"><use href="#logo"/></svg>`);
   UI.num = (c, o = {}) => h`<span class="num${o.cls ? ' ' + o.cls : ''}">${money(c, o)}</span>`;
 
   /* ---------- modal ---------- */
@@ -121,7 +123,7 @@ const UI = (() => {
     h`<div class="segc ${cls}" role="tablist">${options.map(([v, l]) => h`<button type="button" role="tab" class="${String(v) === String(value) ? 'on' : ''}" aria-selected="${String(v) === String(value)}" data-act="${act}" data-v="${v}">${l}</button>`)}</div>`;
 
   UI.empty = ({ icon = 'sparkles', title, text, action }) =>
-    h`<div class="empty">${UI.icon(icon, 28)}<b>${title}</b>${text ? h`<p>${text}</p>` : ''}${action || ''}</div>`;
+    h`<div class="empty">${icon === 'logo' ? UI.logo(56) : UI.icon(icon, 28)}<b>${title}</b>${text ? h`<p>${text}</p>` : ''}${action || ''}</div>`;
   UI.pageHead = ({ title, sub, actions }) =>
     h`<div class="page-head"><div><h1>${title}</h1>${sub ? h`<p class="sub">${sub}</p>` : ''}</div>${actions ? h`<div class="head-actions">${actions}</div>` : ''}</div>`;
   UI.card = (title, body, { actions, cls = '', sub } = {}) =>
