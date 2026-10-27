@@ -3,6 +3,10 @@ ledgerly-backup-*.json
 ledgerly-all-*.csv
 ledgerly-transactions-*.csv
 
+# The server's data folder holds every account's encrypted data and the server secret. Never commit it.
+data/
+*.tmp
+
 # Tooling and OS noise
 node_modules/
 .claude/

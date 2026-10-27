@@ -17,8 +17,10 @@ const K = {
   BUCKETS: { needs: 'Needs', wants: 'Wants' },
   CAT_ICONS: ['home', 'cart', 'car', 'zap', 'heart', 'shield', 'phone', 'book', 'utensils', 'film', 'bag', 'repeat', 'plane', 'gift', 'coffee', 'briefcase', 'banknote', 'trending-up', 'landmark', 'tag'],
   VERSION: '1.0.0',
-  KEY: 'ledgerly:v1',
-  KEY_SNAP: 'ledgerly:v1:snapshot',
+  KEY: 'ledgerly:v1',                 // legacy single-profile data (migrated into a profile, then removed)
+  KEY_PROFILES: 'ledgerly:profiles',
+  KEY_DATA: 'ledgerly:data:',          // + profile id: that profile's encrypted data
+  KEY_SESSION: 'ledgerly:session',     // sessionStorage: unlock state for this tab only
   KEY_THEME: 'ledgerly:theme',
   KEY_LANG: 'ledgerly:lang',
 };
@@ -72,23 +74,33 @@ const S = (() => {
     try { localStorage.setItem(K.KEY_THEME, s.theme); localStorage.setItem(K.KEY_LANG, s.lang); } catch (e) { /* ignore */ }
   };
 
-  S.load = () => {
-    let st = null;
-    try {
-      const raw = localStorage.getItem(K.KEY);
-      if (raw) st = S.normalize(JSON.parse(raw));
-    } catch (e) { S.loadError = e; }
-    S.state = st || S.blank();
-    S.applySettings();
+  /** Read the old, unencrypted single-profile data from before profiles existed. Null if there is none. */
+  S.readLegacy = () => {
+    try { const raw = localStorage.getItem(K.KEY); return raw ? S.normalize(JSON.parse(raw)) : null; } catch (e) { return null; }
   };
 
-  let timer = null;
+  let timer = null, saving = Promise.resolve(), changed = false;   // changed: real edits not yet reported to S.onSaved
+
+  /** Make a profile's decrypted data the live state. saver(json) must return a promise that resolves once it is stored. */
+  S.attach = (state, saver) => {
+    S.state = state; S.saver = saver; S.snapshot = null; S.version++;
+    S.applySettings();
+  };
+  /** Drop everything from memory (lock or sign out). */
+  S.detach = () => { clearTimeout(timer); timer = null; changed = false; S.state = null; S.saver = null; S.snapshot = null; S.version++; };
+
+  /** Save now. Writes are serialised so an older save can never land after a newer one. */
   S.persist = () => {
     clearTimeout(timer); timer = null;
-    try { localStorage.setItem(K.KEY, JSON.stringify(S.state)); S.storageOK = true; }
-    catch (e) { S.storageOK = false; if (S.onStorageError) S.onStorageError(e); }
+    if (!S.state || !S.saver) return saving;
+    const json = JSON.stringify(S.state), saver = S.saver, was = changed;   // capture now, encrypt and store in order
+    changed = false;
+    saving = saving.then(() => saver(json)).then(
+      () => { S.storageOK = true; if (was && S.onSaved) S.onSaved(); },   // a plain flush with no edits is not a change
+      e => { S.storageOK = false; if (S.onStorageError) S.onStorageError(e); });
+    return saving;
   };
-  const persistSoon = () => { clearTimeout(timer); timer = setTimeout(S.persist, 250); };
+  const persistSoon = () => { clearTimeout(timer); timer = setTimeout(S.persist, 200); };
   window.addEventListener('pagehide', () => { if (timer) S.persist(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && timer) S.persist(); });
 
@@ -99,27 +111,28 @@ const S = (() => {
   S.commit = (fn, opts = {}) => {
     const out = fn(S.state);
     S.version++;
+    changed = true;
     persistSoon();
     if (opts.settings) S.applySettings();
     if (!opts.silent) S.emit();
     return out;
   };
 
-  /** Replace the whole state (import / reset / demo). Keeps one undo snapshot. */
+  /** Replace the whole state (import / reset / demo). Keeps one undo snapshot, in memory only. */
   S.replace = (next, opts = {}) => {
-    try { localStorage.setItem(K.KEY_SNAP, JSON.stringify(S.state)); S.hasSnapshot = true; } catch (e) { S.hasSnapshot = false; }
+    S.snapshot = S.state ? JSON.stringify(S.state) : null;
     S.state = S.normalize(next);
     S.version++;
+    changed = true;
     S.applySettings();
     S.persist();
     if (!opts.silent) S.emit();
   };
   S.restoreSnapshot = () => {
+    if (!S.snapshot) return false;
     try {
-      const raw = localStorage.getItem(K.KEY_SNAP);
-      if (!raw) return false;
-      S.state = S.normalize(JSON.parse(raw));
-      S.version++; S.applySettings(); S.persist(); S.emit();
+      S.state = S.normalize(JSON.parse(S.snapshot)); S.snapshot = null;
+      S.version++; changed = true; S.applySettings(); S.persist(); S.emit();
       return true;
     } catch (e) { return false; }
   };

@@ -17,12 +17,12 @@ const I18N = (() => {
   /* Units: English [singular, plural]; Arabic [singular, dual, 3-10, 11+] */
   const EN = { day: ['day', 'days'], week: ['week', 'weeks'], month: ['month', 'months'], year: ['year', 'years'], category: ['category', 'categories'],
     bill: ['bill', 'bills'], transaction: ['transaction', 'transactions'], account: ['account', 'accounts'], goal: ['goal', 'goals'],
-    payment: ['payment', 'payments'], item: ['item', 'items'], row: ['row', 'rows'], plan: ['plan', 'plans'] };
+    payment: ['payment', 'payments'], item: ['item', 'items'], row: ['row', 'rows'], plan: ['plan', 'plans'], minute: ['minute', 'minutes'] };
   const AR = { day: ['يوم', 'يومان', 'أيام', 'يومًا'], week: ['أسبوع', 'أسبوعان', 'أسابيع', 'أسبوعًا'], month: ['شهر', 'شهران', 'أشهر', 'شهرًا'],
     year: ['سنة', 'سنتان', 'سنوات', 'سنة'], category: ['فئة', 'فئتان', 'فئات', 'فئة'], bill: ['فاتورة', 'فاتورتان', 'فواتير', 'فاتورة'],
     transaction: ['معاملة', 'معاملتان', 'معاملات', 'معاملة'], account: ['حساب', 'حسابان', 'حسابات', 'حسابًا'], goal: ['هدف', 'هدفان', 'أهداف', 'هدفًا'],
     payment: ['دفعة', 'دفعتان', 'دفعات', 'دفعة'], item: ['عنصر', 'عنصران', 'عناصر', 'عنصرًا'], row: ['صف', 'صفان', 'صفوف', 'صفًّا'],
-    plan: ['خطة', 'خطتان', 'خطط', 'خطة'] };
+    plan: ['خطة', 'خطتان', 'خطط', 'خطة'], minute: ['دقيقة', 'دقيقتان', 'دقائق', 'دقيقة'] };
 
   /** I18N.count(3, 'day') -> "3 days" / "3 أيام" */
   I.count = (n, unit) => {

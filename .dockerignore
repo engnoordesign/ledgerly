@@ -1,0 +1,8 @@
+.git
+.claude
+data
+tools
+scripts
+node_modules
+*.bat
+README.md

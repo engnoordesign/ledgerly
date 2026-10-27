@@ -38,7 +38,7 @@ const SettingsView = (() => {
           { cls: 's7', sub: t('Needs and Wants drive the ready-made plans.') })}
 
         ${UI.card(t('Your data'), h`
-          <p class="muted">${S.storageOK ? t('Everything is stored privately in this browser. Nothing is sent anywhere.') : t('This browser is blocking storage, so changes will be lost when you close the page. Export a backup often.')}</p>
+          <p class="muted">${S.storageOK ? t('This profile is encrypted in this browser. Backups you download are not encrypted, so keep them private.') : t('This browser is blocking storage, so changes will be lost when you close the page. Export a backup often.')}</p>
           <p class="backup ${backupAge == null || backupAge > 30 ? 'warn' : ''}">${UI.icon(backupAge == null || backupAge > 30 ? 'alert' : 'check', 15)}${meta.lastBackup ? t('Last backup: {date}', { date: U.fmtDate(meta.lastBackup, 'med') }) : t('You have not made a backup yet.')}</p>
           <div class="stack-btns">
             <button class="btn primary" data-act="data:export">${UI.icon('download', 16)}${t('Download backup')}</button>
@@ -52,7 +52,9 @@ const SettingsView = (() => {
             <button class="btn danger ghost" data-act="data:reset">${UI.icon('trash', 16)}${t('Erase everything')}</button>
           </div>`, { cls: 's5' })}
 
-        ${UI.card(t('About'), h`<div class="about">${UI.logo(56)}<div><b>Ledgerly</b><span class="muted">${t('Version {v}', { v: K.VERSION })}</span><span class="muted small">${t('Your data stays on this device.')}</span></div></div>`, { cls: 's12' })}
+        ${AccountView.cards()}
+
+        ${UI.card(t('About'), h`<div class="about">${UI.logo(56)}<div><b>Ledgerly</b><span class="muted">${t('Version {v}', { v: K.VERSION })}</span><span class="muted small">${Sync.enabled() ? t('Your data is encrypted before it syncs.') : t('Your data stays on this device.')}</span></div></div>`, { cls: 's12' })}
 
         ${UI.card(t('Shortcuts'), h`<ul class="kbd-list">
           <li><kbd>N</kbd><span>${t('New transaction')}</span></li><li><kbd>/</kbd><span>${t('Search transactions')}</span></li>
@@ -146,6 +148,7 @@ const SettingsView = (() => {
   /* ---------- first run ---------- */
   const ob = { name: '', accountName: '', accountType: 'checking', opening: '' };
   V.onboard = () => {
+    if (!ob.name) ob.name = set().name || '';
     const s = set();
     const ctl = UI.modal({
       title: t('Welcome to Ledgerly'), size: 'lg', sticky: true,

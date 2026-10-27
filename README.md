@@ -23,8 +23,60 @@ opening `index.html` directly.
 Developer option: `node tools/serve.js` serves it at http://localhost:5173. Browsers keep data per address,
 so data saved there is separate from the app window that the icon opens. Pick one way and stay with it.
 
-Your data is stored in the browser you use (localStorage) and never leaves it. Use
-**Settings → Download backup** regularly; clearing browser data erases everything.
+Your data is stored in the browser you use, encrypted per profile (see below), and only leaves the device if you
+turn on sync. Use **Settings → Download backup** regularly; clearing browser data erases a profile's local copy.
+
+## Profiles, passwords and using Ledgerly from anywhere
+
+**Profiles.** Several people (or several budgets) can share one device. Each profile has its own username,
+password and data. A profile's data is encrypted in the browser with AES-256-GCM, and the key is protected by the
+password (PBKDF2-SHA256, 600,000 rounds). A locked profile is unreadable ciphertext, even in the browser's developer
+tools. Profiles lock themselves after 15 minutes without activity (changeable) and when the window is closed.
+
+**Recovery key.** Creating a profile shows a recovery key once. If you forget the password, the key lets you set a new
+one without losing anything. If you lose both, the data cannot be recovered by anyone, including the server. Keep the
+key somewhere safe and download backups now and then (backups are plain files, so keep them private).
+
+**Access from any device.** Run the server (below), then in *Settings → Sync across devices* turn sync on. On any other
+device open the app, choose *Sign in from another device*, and enter the server address, username and password. Changes
+sync automatically. If two devices change the same profile at the same moment, you choose what to keep (merging both is
+recommended; a merge only adds, so something deleted on one side comes back).
+
+**What the server can and cannot see.** It stores one encrypted blob per account plus a version number. Your password and
+keys never leave your device. The server keeps a scrypt hash of a separate login secret derived from your password, so
+it can check who you are but cannot decrypt anything.
+
+### Run the server
+
+```
+start-server.bat                        (Windows: double-click)
+node server/server.js                   (any system, Node 18 or newer)
+```
+
+It serves the app and the sync service at http://localhost:8787 and keeps its data in `data/` (git-ignored).
+
+| Option | Meaning |
+| --- | --- |
+| `--port 8787` | Port to listen on |
+| `--host 0.0.0.0` | Let other devices on your network connect (default is this computer only) |
+| `--data ./data` | Where accounts are stored |
+| `--signup open\|invite\|closed` | Who may create accounts (default `open`) |
+| `--invite SECRETWORD` | The code required when `--signup invite` |
+| `--cert file --key file` | Serve HTTPS directly |
+
+### Reaching it from your phone or another PC
+
+Browsers only turn on encryption for **HTTPS** pages (and `localhost`), so other devices need an `https://` address:
+
+* **Quick, from your own PC:** a tunnel such as `cloudflared tunnel --url http://localhost:8787` or Tailscale Funnel gives
+  you an https address. The PC must stay on and the server running.
+* **Always on:** deploy the included `Dockerfile` to any host that gives you HTTPS and a persistent disk (Render, Railway,
+  Fly.io, or a small VPS behind Caddy). Mount the disk at `/data`. On a public server use
+  `LEDGERLY_SIGNUP=invite` and `LEDGERLY_INVITE=choose-a-secret` so strangers cannot create accounts.
+* The desktop icon opens the app from a file, so there you type the server's https address once under *Sync across devices*.
+
+Back up the `data/` folder if the server holds the only copy of someone's data. Never publish it: it contains every
+account's encrypted data and the server secret.
 
 ## What it does
 
@@ -58,10 +110,17 @@ Ledgerly.bat          opens the app in its own window, no setup needed
 scripts/              setup.ps1, launch.ps1, common.ps1 (the logic behind the two .bat files)
 assets/               ledgerly.ico and ledgerly.png (drawn by tools/make-icon.js)
 index.html            page shell and icon sprite
+server/server.js      the optional server: serves the app and stores each account's encrypted data
+start-server.bat      starts the server on Windows
+Dockerfile            hosting the server in a container
 css/styles.css        design tokens (light/dark), layout, components, responsive rules
 js/util.js            money, dates, escaping html`` template
 js/i18n.js            t() translation layer and Arabic plural rules
 js/lang-ar.js         Arabic dictionary (English text is the key)
+js/vault.js           password-based encryption (WebCrypto): data key, password wrap, recovery key
+js/auth.js            profiles, lock screen, encrypted storage, idle lock
+js/sync.js            talks to the server: push, pull, conflicts, sign-in from another device
+js/merge.js           merging two copies of a profile
 js/store.js           state, persistence, settings
 js/engine.js          read-only accounting selectors (balances, budgets, goals, statistics, plans, insights)
 js/actions.js         validated mutations (return undo data), recurring posting, CSV import
@@ -77,6 +136,7 @@ tools/                engine-test.js, check-i18n.js, serve.js
 ```
 node tools/engine-test.js     # money, dates, accounting identities, plans, statistics, Arabic plurals
 node tools/check-i18n.js      # every string the app can show has an Arabic translation
+node tools/auth-test.js       # encryption, recovery, merging and the whole server API (security cases included)
 ```
 
 ## Adding a language
