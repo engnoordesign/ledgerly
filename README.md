@@ -6,9 +6,20 @@ monthly and yearly statistics.
 
 ## Run it
 
-Double-click `index.html`. There is nothing to install or build.
+**Windows, first time:** double-click **`run-setup.bat`**. It checks the files, puts a Ledgerly icon on your
+Desktop and in the Start menu, runs a quick self-check, and opens the app in its own window.
+After that, open Ledgerly from the icon (right-click it and choose *Pin to taskbar* for one-click access).
 
-For a local server instead (optional): `node tools/serve.js` and open http://localhost:5173.
+* `Ledgerly.bat` opens the app straight away, with no setup.
+* `run-setup.bat -NoLaunch` sets up without opening the app.
+* `run-setup.bat -Uninstall` removes the icons. Your data is not touched.
+
+Nothing needs installing: the app is plain HTML, CSS and JavaScript. Setup uses Microsoft Edge, Chrome or
+Brave for the standalone window and falls back to your default browser. It also works on any system by
+opening `index.html` directly.
+
+Developer option: `node tools/serve.js` serves it at http://localhost:5173. Browsers keep data per address,
+so data saved there is separate from the app window that the icon opens. Pick one way and stay with it.
 
 Your data is stored in the browser you use (localStorage) and never leaves it. Use
 **Settings → Download backup** regularly; clearing browser data erases everything.
@@ -40,6 +51,10 @@ Your data is stored in the browser you use (localStorage) and never leaves it. U
 ## Project layout
 
 ```
+run-setup.bat         first-time setup: icon on Desktop and Start menu, self-check, launch
+Ledgerly.bat          opens the app in its own window, no setup needed
+scripts/              setup.ps1, launch.ps1, common.ps1 (the logic behind the two .bat files)
+assets/               ledgerly.ico and ledgerly.png (drawn by tools/make-icon.js)
 index.html            page shell and icon sprite
 css/styles.css        design tokens (light/dark), layout, components, responsive rules
 js/util.js            money, dates, escaping html`` template
