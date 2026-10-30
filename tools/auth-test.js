@@ -53,6 +53,16 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   eq(Array.from((await Vault.unlockWithRecovery(acct.recovery, acct.recWrap)).dk), Array.from(acct.dk), 'recovery still works after a password change');
   ok(Vault.strength('abc') === 0 && Vault.strength('password') <= 1 && Vault.strength('Tr1cky-long-passphrase!') >= 3, 'strength guide ranks passwords sensibly');
 
+  // device key: "stay signed in on this device"
+  const dev = await Vault.newDeviceKey();
+  ok(dev.extractable === false, 'the device key cannot be exported');
+  const saved = await Vault.sealWithKey(dev, JSON.stringify({ dk: 'abc', secret: 'xyz' }));
+  eq(JSON.parse(await Vault.openWithKey(dev, saved)).secret, 'xyz', 'the device key seals and reopens the saved sign-in');
+  await throws(() => Vault.newDeviceKey().then(k => Vault.openWithKey(k, saved)), 'another device key cannot open it');
+  const dparts = saved.split('.'), dflip = Buffer.from(dparts[2], 'base64'); dflip[0] ^= 1;
+  await throws(() => Vault.openWithKey(dev, `v1.${dparts[1]}.${dflip.toString('base64')}`), 'a tampered saved sign-in is rejected');
+  ok(!saved.includes('abc') && !saved.includes('xyz'), 'the saved sign-in is not readable text');
+
   /* ================= merge ================= */
   const mine = { accounts: [{ id: 'a1', name: 'Mine' }], categories: [], transactions: [{ id: 't1', date: '2026-10-01', amount: 100 }, { id: 't2', date: '2026-10-02', amount: 5 }],
     goals: [], recurring: [], budgets: { '2026-10': { lines: { x: 1 } } }, settings: { currency: 'USD', name: 'Me' }, meta: { onboarded: true } };

@@ -33,6 +33,12 @@ password and data. A profile's data is encrypted in the browser with AES-256-GCM
 password (PBKDF2-SHA256, 600,000 rounds). A locked profile is unreadable ciphertext, even in the browser's developer
 tools. Profiles lock themselves after 15 minutes without activity (changeable) and when the window is closed.
 
+**Stay signed in.** When you sign in (or later in *Settings → Profile and security*) you can choose *Stay signed in on this
+device*. The app then opens straight to your data with no password. The saved sign-in is sealed with a key the browser
+keeps but cannot reveal, so it cannot be copied out of storage. While this is on, idle auto-lock is off. *Sign out* (or
+switching the option off) forgets it. Anyone who can open Ledgerly on that device can see the profile, so leave it off on
+shared or public computers.
+
 **Recovery key.** Creating a profile shows a recovery key once. If you forget the password, the key lets you set a new
 one without losing anything. If you lose both, the data cannot be recovered by anyone, including the server. Keep the
 key somewhere safe and download backups now and then (backups are plain files, so keep them private).
@@ -83,10 +89,10 @@ account's encrypted data and the server secret.
 | Area | Highlights |
 | --- | --- |
 | Dashboard | Net worth, income, expenses, net saved, budget left; cash flow by Day / Week / Month / Year; spending donut; insights and a financial-health score; upcoming bills; goals; your average day / week / month / year |
-| Transactions | Income, expense and transfer ledger; search; filters; day groups with totals; bulk edit; CSV export; bank-CSV import with preview and duplicate skipping; payee autofill; repeat as scheduled |
+| Transactions | Income, expense and transfer ledger; search; filters; day groups with totals; bulk edit; CSV export; bank-CSV import with preview and duplicate skipping; payee autofill; a free-text purpose ("what is it for?") and a four-level importance on every income and expense, searchable and filterable; repeat as scheduled |
 | Budget | Zero-based plan ("left to budget" must reach zero), Needs / Wants / Savings split, inline editing, carry-forward plans per month |
 | Plans | Smart plan built from your habits plus 50/30/20, 60/20/20, 60/30/10, 50/20/30, 45/15/40, all converted into amounts from your income, with preview before applying |
-| Statistics | Day, week, month, year or custom range; comparison with the previous period; drill-down chart; income statement; category and source breakdown; highlights |
+| Statistics | Day, week, month, year or custom range; comparison with the previous period; drill-down chart; income statement; category and source breakdown; spending and income by importance; highlights |
 | Goals | Progress, needed-per-month, pace and ETA, deposits and withdrawals as transfers |
 | Accounts | Checking, cash, savings, investment, credit card, loan; balances, 6-month trend, statement reconciliation |
 | Scheduled | Salary, rent, subscriptions; auto-post or confirm each time; 30-day outlook |

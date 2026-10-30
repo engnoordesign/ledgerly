@@ -56,6 +56,10 @@ const StatsView = (() => {
     const nwStart = U.sum([...Q.balances(U.addDays(from, -1)).values()]), nwEnd = U.sum([...Q.balances(last).values()]);
     const expLines = lines(cur.exp, prev.exp, 'expense'), incLines = lines(cur.inc, prev.inc, 'income');
     const rate = cur.income ? net / cur.income : null;
+    const impRows = (map, type) => [...Q.importance(type).map(i => ({ label: i.label, value: map.get(i.level) || 0, color: K.IMP_COLORS[i.level], lead: UI.imp({ type, importance: i.level }) })),
+      { label: t('Not set'), value: map.get(0) || 0, color: '#9a9990', lead: '' }].filter(r => r.value > 0);
+    const impExp = impRows(cur.impExp, 'expense'), impInc = impRows(cur.impInc, 'income');
+    const impEmpty = UI.empty({ icon: 'tag', title: t('Nothing marked yet'), text: t('Choose an importance when you add an entry and it is summarised here.') });
     const shown = V.kind === 'day' ? list : list.slice(0, 10);
 
     return h`${head}${controls}
@@ -72,6 +76,9 @@ const StatsView = (() => {
 
         ${UI.card(t('Spending by category'), topExp.length ? C.hbars(topExp.map(r => ({ label: Q.catName(r.cat), value: r.value, color: r.cat.color, lead: UI.catIcon(r.cat, 26) })), { total: cur.expense }) : UI.empty({ icon: 'pie', title: t('No spending in this period') }), { cls: 's6' })}
         ${UI.card(t('Income sources'), topInc.length ? C.hbars(topInc.map(r => ({ label: Q.catName(r.cat), value: r.value, color: r.cat.color, lead: UI.catIcon(r.cat, 26) })), { total: cur.income }) : UI.empty({ icon: 'banknote', title: t('No income in this period') }), { cls: 's6' })}
+
+        ${UI.card(t('Spending by importance'), impExp.length ? h`${C.hbars(impExp, { total: cur.expense })}<p class="muted small imp-note">${t('Darker means more important.')}</p>` : impEmpty, { cls: 's6' })}
+        ${UI.card(t('Income by importance'), impInc.length ? C.hbars(impInc, { total: cur.income }) : impEmpty, { cls: 's6' })}
 
         ${UI.card(t('Income statement'), h`<div class="table-wrap"><table class="plain stmt"><thead><tr><th>${t('Line')}</th><th class="r">${label()}</th><th class="r">${t('Previous')}</th><th class="r">${t('Change')}</th></tr></thead><tbody>
           <tr class="grp"><td>${t('Income')}</td><td class="r num pos">${money(cur.income)}</td><td class="r num muted">${money(prev.income)}</td><td class="r num">${money(cur.income - prev.income, { sign: true })}</td></tr>

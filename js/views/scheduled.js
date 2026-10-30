@@ -68,6 +68,9 @@ const ScheduledView = (() => {
           <div class="field only-transfer"><label for="sch-to">${t('To account')}</label><select id="sch-to" name="toAccountId">${UI.accountOptions(x.toAccountId, { blank: t('Choose account') })}</select></div>
           <div class="field not-transfer"><label for="sch-cat">${t('Category')}</label><select id="sch-cat" name="categoryId">${UI.categoryOptions(x.type === 'income' ? 'income' : 'expense', x.categoryId, t('Uncategorized'))}</select></div>
         </div>
+        <div class="row2 not-transfer">
+          <div class="field"><label for="sch-purpose">${t('What is it for?')}</label><input id="sch-purpose" name="purpose" maxlength="200" value="${x.purpose || ''}" autocomplete="off"></div>
+          <div class="field"><label for="sch-imp">${t('Importance')}</label><select id="sch-imp" name="importance">${UI.options(Q.importance(x.type === 'income' ? 'income' : 'expense').map(i => [i.level, i.label]), x.importance, t('Not set'))}</select></div></div>
         <div class="field only-transfer"><label for="sch-goal">${t('Savings goal (optional)')}</label><select id="sch-goal" name="goalId">${UI.options(S.state.goals.map(g => [g.id, g.name]), x.goalId, t('No goal'))}</select></div>
         <div class="row2">
           <div class="field"><label for="sch-start">${t('First date')}</label><input type="date" id="sch-start" name="startDate" value="${x.startDate}" required></div>
@@ -87,7 +90,7 @@ const ScheduledView = (() => {
   App.onSubmit('sch:save', f => {
     const d = UI.read(f);
     const res = A.saveRecurring({ id: f.dataset.id, name: d.name, type: d.type, amount: d.amount, accountId: d.accountId, toAccountId: d.toAccountId, categoryId: d.categoryId,
-      frequency: d.frequency, startDate: d.startDate, endDate: d.endDate, autoPost: d.autoPost, goalId: d.goalId });
+      frequency: d.frequency, startDate: d.startDate, endDate: d.endDate, autoPost: d.autoPost, goalId: d.goalId, purpose: d.purpose, importance: d.importance });
     if (res.error) return UI.formError(f, res.error);
     V.ctl.close(); A.processRecurring(); UI.toast(t('Scheduled item saved'));
   });

@@ -24,12 +24,20 @@ const AccountView = (() => {
       title: t('Profile'), size: 'sm',
       body: h`<div class="pmenu"><div class="pm-head">${avatar(p, 52)}<div><b>${p.name}</b><small class="muted">${Auth.at(p.username)}</small></div></div>
         <div class="pm-sync">${Sync.enabled() ? h`${dot()}<span>${Sync.label()}</span>` : h`<span class="muted">${t('Your data stays on this device.')}</span>`}</div>
-        <button type="button" class="btn wide" data-act="acct:lock">${UI.icon('lock', 16)}<span>${t('Lock now')}</span></button>
-        <button type="button" class="btn wide" data-act="acct:lock">${UI.icon('users', 16)}<span>${t('Switch profile')}</span></button>
+        <button type="button" class="btn wide" data-act="acct:lock">${UI.icon('lock', 16)}<span>${p.remember ? t('Sign out') : t('Lock now')}</span></button>
+        <button type="button" class="btn wide" data-act="acct:switch">${UI.icon('users', 16)}<span>${t('Switch profile')}</span></button>
         <a class="btn wide" href="#/settings" data-close>${UI.icon('settings', 16)}<span>${t('Profile and security')}</span></a></div>`,
     });
   });
   App.on('acct:lock', () => { UI.closeAll(); Auth.lock(); });
+  App.on('acct:switch', () => { UI.closeAll(); Auth.lock({ forget: false }); });
+  App.onChange('acct:remember', async el => {
+    try {
+      if (el.checked) { await Auth.remember(); UI.toast(t('This device will stay signed in.')); }
+      else { Auth.forget(); UI.toast(t('This device will ask for the password again.')); }
+    } catch (e) { Auth.forget(); UI.toast(t('This browser could not keep you signed in.'), { kind: 'warn' }); }
+    App.render();
+  });
 
   /* ---------- settings cards ---------- */
   const profileBody = () => {
@@ -38,11 +46,13 @@ const AccountView = (() => {
       <div class="form-grid">
         <div class="field"><label for="pf-name">${t('Display name')}</label><input id="pf-name" data-change="acct:rename" value="${p.name}" autocomplete="off"></div>
         <div class="field"><label for="pf-lock">${t('Lock automatically after')}</label>
-          <select id="pf-lock" data-change="acct:autolock">${UI.options([[0, t('Never')], ...[1, 5, 15, 30, 60].map(n => [n, U.plural(n, 'minute')])], al)}</select>
-          <small class="muted">${t('Reopening the profile needs its password.')}</small></div>
+          <select id="pf-lock" data-change="acct:autolock" ${p.remember ? 'disabled' : ''}>${UI.options([[0, t('Never')], ...[1, 5, 15, 30, 60].map(n => [n, U.plural(n, 'minute')])], al)}</select>
+          <small class="muted">${p.remember ? t('Auto-lock is off while this device stays signed in.') : t('Reopening the profile needs its password.')}</small></div>
+        <div class="field stay-field"><label class="check"><input type="checkbox" id="pf-stay" data-change="acct:remember" ${p.remember ? 'checked' : ''} ${Auth.canRemember() ? '' : 'disabled'}><span>${t('Stay signed in on this device')}</span></label>
+          <small class="muted">${t('Anyone who can open Ledgerly on this device can see this profile. Turn it off on shared or public computers.')}</small></div>
       </div>
       <div class="stack-btns">
-        <button type="button" class="btn" data-act="acct:lock">${UI.icon('lock', 16)}${t('Lock now')}</button>
+        <button type="button" class="btn" data-act="acct:lock">${UI.icon('lock', 16)}${p.remember ? t('Sign out') : t('Lock now')}</button>
         <button type="button" class="btn" data-act="acct:pw">${UI.icon('key', 16)}${t('Change password')}</button>
         <button type="button" class="btn" data-act="acct:newkey">${UI.icon('shield', 16)}${t('New recovery key')}</button>
         <button type="button" class="btn danger ghost" data-act="acct:delete">${UI.icon('trash', 16)}${t('Delete this profile')}</button></div>`;

@@ -87,11 +87,12 @@ const Q = (() => {
   });
 
   /* ---------- aggregation ---------- */
-  const emptyAgg = key => ({ key, income: 0, expense: 0, saved: 0, count: 0, exp: new Map(), inc: new Map() });
+  const emptyAgg = key => ({ key, income: 0, expense: 0, saved: 0, count: 0, exp: new Map(), inc: new Map(), impExp: new Map(), impInc: new Map() });
   const addTo = (g, t, accs) => {
     g.count++;
-    if (t.type === 'income') { g.income += t.amount; const c = t.categoryId || '_none'; g.inc.set(c, (g.inc.get(c) || 0) + t.amount); }
-    else if (t.type === 'expense') { g.expense += t.amount; const c = t.categoryId || '_none'; g.exp.set(c, (g.exp.get(c) || 0) + t.amount); }
+    const im = t.importance || 0;   // 0 = not set
+    if (t.type === 'income') { g.income += t.amount; const c = t.categoryId || '_none'; g.inc.set(c, (g.inc.get(c) || 0) + t.amount); g.impInc.set(im, (g.impInc.get(im) || 0) + t.amount); }
+    else if (t.type === 'expense') { g.expense += t.amount; const c = t.categoryId || '_none'; g.exp.set(c, (g.exp.get(c) || 0) + t.amount); g.impExp.set(im, (g.impExp.get(im) || 0) + t.amount); }
     else {
       const f = accs.get(t.accountId), to = accs.get(t.toAccountId);
       const fs = f && Q.accType(f).saving, ts = to && Q.accType(to).saving;
@@ -143,9 +144,10 @@ const Q = (() => {
       if (o.accountId && t.accountId !== o.accountId && t.toAccountId !== o.accountId) return false;
       if (o.categoryId && (o.categoryId === '_none' ? t.categoryId : t.categoryId !== o.categoryId)) return false;
       if (o.goalId && t.goalId !== o.goalId) return false;
+      if (o.importance) { if (t.type === 'transfer' || (t.importance || 0) !== (o.importance === 'none' ? 0 : +o.importance)) return false; }
       if (o.uncleared && t.cleared) return false;
       if (q) {
-        const hay = [t.payee, t.note, (t.tags || []).join(' '), (cats.get(t.categoryId) || {}).name, (accs.get(t.accountId) || {}).name,
+        const hay = [t.payee, t.note, t.purpose, Q.importanceLabel(t.type, t.importance), (t.tags || []).join(' '), (cats.get(t.categoryId) || {}).name, (accs.get(t.accountId) || {}).name,
           U.toInput(t.amount), U.money(t.amount, { plain: true })].join(' ').toLowerCase();
         if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
       }
@@ -157,8 +159,25 @@ const Q = (() => {
     for (const t of Q.sorted()) {
       if (!t.payee) continue;
       const k = t.payee.toLowerCase(), e = m.get(k);
-      if (!e) m.set(k, { name: t.payee, type: t.type, categoryId: t.categoryId, accountId: t.accountId, toAccountId: t.toAccountId, amount: t.amount, count: 1 });
+      if (!e) m.set(k, { name: t.payee, type: t.type, categoryId: t.categoryId, accountId: t.accountId, toAccountId: t.toAccountId, amount: t.amount, purpose: t.purpose, importance: t.importance, count: 1 });
       else e.count++;
+    }
+    return m;
+  });
+  /** The importance scale for income or expenses: 4 = most important. The wording fits the kind of money. */
+  Q.importance = type => type === 'income'
+    ? [{ level: 4, label: t('Essential'), hint: t('Money you rely on to live') }, { level: 3, label: t('Important'), hint: t('A regular, planned source') },
+      { level: 2, label: t('Helpful'), hint: t('A welcome extra') }, { level: 1, label: t('Extra'), hint: t('A one-off or unexpected bonus') }]
+    : [{ level: 4, label: t('Essential'), hint: t('Something you must pay for, like rent, food or bills') }, { level: 3, label: t('Important'), hint: t('Matters a lot, but could wait a little') },
+      { level: 2, label: t('Nice to have'), hint: t('Pleasant, but you could do without it') }, { level: 1, label: t('Not needed'), hint: t('An impulse, or something you did not really need') }];
+  Q.importanceLabel = (type, level) => { const f = level ? Q.importance(type).find(i => i.level === level) : null; return f ? f.label : ''; };
+  /** Reasons people have typed before, most used first, for quick re-use. */
+  Q.purposes = () => cached('purposes', () => {
+    const m = new Map();
+    for (const x of Q.sorted()) {
+      if (!x.purpose) continue;
+      const k = x.purpose.toLowerCase(), e = m.get(k);
+      if (!e) m.set(k, { text: x.purpose, count: 1 }); else e.count++;
     }
     return m;
   });
@@ -308,6 +327,10 @@ const Q = (() => {
       else if (rate >= 0) out.push({ kind: 'warn', icon: 'trending-up', title: t('Savings rate is {pct}', { pct: U.fmtPct(rate) }), text: t('Reaching {target}% means keeping another {amount} this month.', { target: set.savingsTarget, amount: $(Math.round(a.income * target - (a.income - a.expense))) }), href: '#/stats' });
       else out.push({ kind: 'bad', icon: 'alert', title: t('Spending is above income'), text: t('Expenses exceed income by {amount} this month.', { amount: $(a.expense - a.income) }), href: '#/stats' });
     }
+
+    const skip = a.impExp.get(1) || 0;
+    if (a.expense > 0 && skip >= 10 * U.currency().pow && skip / a.expense >= 0.1) out.push({ kind: 'info', icon: 'tag', title: t('{pct} of your spending was marked “Not needed”', { pct: U.fmtPct(skip / a.expense) }),
+      text: t('That is {amount} you could keep.', { amount: $(skip) }), href: '#/transactions?imp=1&month=' + month });
 
     if (prev.count && (!isCur || day >= 10)) {
       const scale = isCur ? day / dim : 1;

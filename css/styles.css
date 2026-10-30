@@ -492,7 +492,7 @@ table.pv td:first-child { padding-inline-start: 18px; }
 
 /* ---------- statistics ---------- */
 .hbars { display: flex; flex-direction: column; gap: 10px; }
-.hrow { display: grid; grid-template-columns: minmax(110px, 1.2fr) minmax(60px, 2fr) auto; gap: 12px; align-items: center; }
+.hrow { display: grid; grid-template-columns: minmax(132px, 1.6fr) minmax(48px, 2fr) auto; gap: 12px; align-items: center; }
 .hrow .hl { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .hrow .hn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .hrow .ht { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
@@ -702,6 +702,21 @@ body.modal-open { overflow: hidden; }
 .about { display: flex; align-items: center; gap: 16px; }
 .about > div { display: flex; flex-direction: column; gap: 1px; }
 .about b { font-size: 18px; letter-spacing: -.01em; }
+
+/* ---------- purpose and importance ---------- */
+form:not([data-type="income"]) .only-income { display: none; }
+form[data-type="income"] .only-expense { display: none; }
+.imp { display: inline-flex; gap: 2px; align-items: center; flex: none; }
+.imp i { width: 5px; height: 11px; border-radius: 2px; background: var(--surface-3); }
+.imp i.on { background: var(--accent); }
+.imp-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 6px; }
+.imp-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 8px 10px; text-align: start; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 500; }
+.imp-chip:hover { background: var(--surface-2); }
+.imp-chip.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.imp-chip.on .imp i.on { background: var(--accent); }
+.purpose { color: var(--ink-2); font-style: italic; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-note { margin-top: 10px; }
+@media (max-width: 760px) { .purpose { max-width: 14ch; } .imp-pick { grid-template-columns: repeat(2, 1fr); } }
 
 /* ---------- profiles, lock screen, sync ---------- */
 [hidden] { display: none !important; }

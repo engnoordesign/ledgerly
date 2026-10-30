@@ -33,7 +33,7 @@ const Auth = (() => {
   const readSession = () => { try { return JSON.parse(ss.get(K.KEY_SESSION)); } catch (e) { return null; } };
   const saverFor = (p, dk) => async json => { localStorage.setItem(K.KEY_DATA + p.id, await Vault.seal(dk, json)); };
 
-  async function enter(p, dk, secret) {
+  async function enter(p, dk, secret, opts = {}) {
     const sealed = ls.get(K.KEY_DATA + p.id);
     let state = null;
     if (sealed) { try { state = S.normalize(JSON.parse(await Vault.open(dk, sealed))); } catch (e) { throw new UserError(t('This profile’s data could not be read.')); } }
@@ -45,16 +45,17 @@ const Auth = (() => {
     X.prefs = {};
     S.applySettings();
     X.last = p.id; saveList(); writeSession();
+    if (opts.remember) { try { await X.remember(); } catch (e) { UI.toast(t('This browser could not keep you signed in. You will be asked for the password next time.'), { kind: 'warn', ms: 9000 }); } }
     if (!sealed) await S.persist();                             // a brand-new profile has its encrypted copy before the app opens
     hide(); touch(); startIdle();
     await App.afterUnlock();
   }
   X.enter = enter;
 
-  X.login = async (p, password) => {
+  X.login = async (p, password, remember) => {
     let r;
     try { r = await Vault.unlock(password, p); } catch (e) { throw new UserError(t('Wrong password.')); }
-    await enter(p, r.dk, r.auth);
+    await enter(p, r.dk, r.auth, { remember });
   };
 
   X.create = async ({ name, username, password, adopt }) => {
@@ -83,6 +84,7 @@ const Auth = (() => {
     const re = await Vault.rewrap(newPassword, dk);
     if (p.sync && p.sync.enabled !== false) await Sync.recoverReset(p, (await Vault.fromRecovery(bytes)).auth, re);   // server first, so both always agree
     Object.assign(p, { salt: re.salt, iter: re.iter, pwWrap: re.pwWrap }); saveList();
+    X.forget(p);   // the old saved sign-in holds the old login secret
     await enter(p, dk, re.auth);
   };
 
@@ -96,6 +98,7 @@ const Auth = (() => {
   /** Store a profile's new password wrap and login secret (after a password change or a re-sign-in). */
   X.setCredentials = (re, secret) => {
     Object.assign(X.profile, { salt: re.salt, iter: re.iter, pwWrap: re.pwWrap }); X.secret = secret; saveList(); writeSession();
+    if (X.profile.remember) X.remember().catch(() => X.forget());   // keep the saved sign-in in step with the new secret
   };
   X.newRecoveryKey = async password => {
     const cur = await confirmCurrent(password), p = X.profile, rec = Vault.random(16), rc = await Vault.fromRecovery(rec);
@@ -115,16 +118,45 @@ const Auth = (() => {
     show('pick');
   };
 
+  /* ---------- stay signed in on this device ----------
+     The unlock secret is sealed with a device key kept in IndexedDB as a non-extractable CryptoKey, so the saved sign-in
+     cannot be lifted out of storage and used elsewhere. It is opt-in per profile and removed by signing out. */
+  const idb = {
+    db: () => new Promise((res, rej) => { const r = indexedDB.open('ledgerly', 1); r.onupgradeneeded = () => r.result.createObjectStore('keys'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }),
+    get: async k => { const db = await idb.db(); return new Promise((res, rej) => { const q = db.transaction('keys', 'readonly').objectStore('keys').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); },
+    put: async (k, v) => { const db = await idb.db(); return new Promise((res, rej) => { const tx = db.transaction('keys', 'readwrite'); tx.objectStore('keys').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
+  };
+  const deviceKey = async create => { let k = await idb.get('device'); if (!k && create) { k = await Vault.newDeviceKey(); await idb.put('device', k); } return k; };
+  X.canRemember = () => !!(window.indexedDB && Vault.available());
+  X.remember = async () => {
+    const p = X.profile, key = await deviceKey(true);
+    localStorage.setItem(K.KEY_REMEMBER + p.id, await Vault.sealWithKey(key, JSON.stringify({ dk: Vault.b64(X.dk), secret: X.secret })));
+    p.remember = true; saveList();
+  };
+  X.forget = p => {
+    p = p || X.profile; if (!p) return;
+    ls.del(K.KEY_REMEMBER + p.id);
+    if (p.remember) { p.remember = false; saveList(); }
+  };
+  X.resume = async p => {
+    const sealed = ls.get(K.KEY_REMEMBER + p.id), key = sealed && await deviceKey(false);
+    if (!sealed || !key) throw new Error('NO_REMEMBER');
+    const o = JSON.parse(await Vault.openWithKey(key, sealed));
+    await enter(p, Vault.unb64(o.dk), o.secret);
+  };
+
   /* ---------- lock, idle ---------- */
   let lastActive = Date.now(), idleTimer = null;
   const touch = () => { lastActive = Date.now(); };
   ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(ev => addEventListener(ev, touch, { passive: true, capture: true }));
   const startIdle = () => {
     clearInterval(idleTimer);
-    idleTimer = setInterval(() => { const m = X.profile && X.profile.autoLock; if (m > 0 && Date.now() - lastActive > m * 60000) X.lock(); }, 10000);
+    idleTimer = setInterval(() => { const m = X.profile && X.profile.autoLock; if (m > 0 && !X.profile.remember && Date.now() - lastActive > m * 60000) X.lock(); }, 10000);   // a device told to stay signed in does not idle-lock
   };
-  X.lock = async () => {
+  /** Lock the open profile. By default the saved sign-in is forgotten too, so the password is needed again; Switch profile keeps it. */
+  X.lock = async (opts = {}) => {
     if (!X.profile) return;
+    if (opts.forget !== false) X.forget(X.profile);
     Sync.stop();
     try { await S.persist(); } catch (e) { /* surfaced by onStorageError */ }
     clearInterval(idleTimer); ss.del(K.KEY_SESSION);
@@ -150,6 +182,8 @@ const Auth = (() => {
     loadList();
     const s = readSession(), p = s && byId(s.pid);
     if (p) { try { await enter(p, Vault.unb64(s.dk), s.secret); return; } catch (e) { ss.del(K.KEY_SESSION); } }
+    const last = byId(X.last);   // a profile this device was told to keep signed in
+    if (last && last.remember) { try { await X.resume(last); return; } catch (e) { X.forget(last); } }
     show(X.profiles.length ? 'pick' : 'create');
   };
 
@@ -168,6 +202,7 @@ const Auth = (() => {
   const links = (...l) => h`<div class="auth-links">${l}</div>`;
   const link = (act, label, extra = '') => h`<button type="button" class="link" data-act="${act}" ${extra ? U.raw(extra) : ''}>${label}</button>`;
   const err = () => h`<div class="form-error" role="alert" hidden></div>`;
+  const stay = () => X.canRemember() ? h`<label class="check stay"><input type="checkbox" name="remember" checked><span>${t('Keep me signed in on this device')}</span></label>` : '';
   const defaultServer = () => ls.get('ledgerly:server') || (/^https?:$/.test(location.protocol) ? location.origin : '');
 
   const views = {
@@ -175,12 +210,13 @@ const Auth = (() => {
       <p class="sub">${t('Your browser only turns on encryption for secure pages. Open Ledgerly from its desktop icon, from an https:// address, or from http://localhost.')}</p></div>`,
 
     pick: () => h`<h1>${t('Who is using Ledgerly?')}</h1><p class="sub">${t('Choose a profile to unlock it. Each profile has its own password and its own data.')}</p>
-      <div class="profile-grid">${X.profiles.map(p => h`<button type="button" class="ptile" data-act="auth:select" data-id="${p.id}">${avatar(p, 60)}<b>${p.name}</b><small>${X.at(p.username)}</small>${p.sync && p.sync.enabled !== false ? h`<span class="pill info">${t('Synced')}</span>` : ''}</button>`)}
+      <div class="profile-grid">${X.profiles.map(p => h`<button type="button" class="ptile" data-act="auth:select" data-id="${p.id}">${avatar(p, 60)}<b>${p.name}</b><small>${X.at(p.username)}</small>${p.remember ? h`<span class="pill">${t('Signed in')}</span>` : ''}${p.sync && p.sync.enabled !== false ? h`<span class="pill info">${t('Synced')}</span>` : ''}</button>`)}
         <button type="button" class="ptile add" data-act="auth:new"><span class="avatar plus" style="--s:60px">${UI.icon('plus', 24)}</span><b>${t('Add profile')}</b></button></div>
       ${links(link('auth:server', `${t('Sign in from another device')}`))}`,
 
     login: () => { const p = ui.ctx.p; return h`<form id="auf" data-submit="auth:login" novalidate>${avatar(p, 76)}<h1>${p.name}</h1><p class="sub">${X.at(p.username)}</p>
       <div class="field"><label for="au-pass">${t('Password')}</label>${pw('au-pass', 'password', 'current-password', true)}</div>${err()}
+      ${stay()}
       <button class="btn primary wide" type="submit">${UI.icon('lock', 16)}<span>${t('Unlock')}</span></button>
       ${links(link('auth:forgot', t('Forgot password?'), `data-id="${p.id}"`), link('auth:back', t('Switch profile')))}</form>`; },
 
@@ -195,6 +231,7 @@ const Auth = (() => {
         <div class="strength" id="au-str" data-s="0"><i></i><i></i><i></i><i></i><span>${t('At least 8 characters')}</span></div></div>
       <div class="field"><label for="au-pass2">${t('Confirm password')}</label>${pw('au-pass2', 'password2', 'new-password')}</div>
       <p class="muted small">${t('Nobody can read your data without the password, not even us. You will get a recovery key on the next screen.')}</p>${err()}
+      ${stay()}
       <button class="btn primary wide" type="submit">${t('Create profile')}</button>
       ${links(X.profiles.length ? link('auth:back', t('Back')) : '', link('auth:server', t('Sign in from another device')))}</form>`; },
 
@@ -219,6 +256,7 @@ const Auth = (() => {
       ${f ? h`<div class="field"><label for="au-rec">${t('Recovery key')}</label><input id="au-rec" name="recovery" class="num" dir="ltr" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-IJKL-MNPQ-RSTV-WX" required></div>
         <div class="field"><label for="au-pass">${t('New password')}</label>${pw('au-pass', 'password', 'new-password')}</div>`
         : h`<div class="field"><label for="au-pass">${t('Password')}</label>${pw('au-pass', 'password', 'current-password')}</div>`}${err()}
+      ${stay()}
       <button class="btn primary wide" type="submit">${UI.icon('cloud', 16)}<span>${f ? t('Reset and sign in') : t('Sign in')}</span></button>
       ${links(link('auth:server-toggle', f ? t('Use my password instead') : t('Forgot password?')), X.profiles.length ? link('auth:back', t('Back')) : '')}</form>`; },
   };
@@ -255,7 +293,11 @@ const Auth = (() => {
   const fails = {};
   const waitLeft = p => Math.max(0, Math.ceil((((fails[p.id] || {}).until || 0) - Date.now()) / 1000));
 
-  App.on('auth:select', el => { const p = byId(el.dataset.id); if (p) show('login', { p }); });
+  App.on('auth:select', async el => {
+    const p = byId(el.dataset.id); if (!p) return;
+    if (p.remember) { try { await X.resume(p); return; } catch (e) { X.forget(p); } }   // one tap for a profile kept signed in
+    show('login', { p });
+  });
   App.on('auth:back', () => show(X.profiles.length ? 'pick' : 'create'));
   App.on('auth:new', () => show('create'));
   App.on('auth:forgot', el => show('forgot', { p: byId(el.dataset.id) }));
@@ -280,7 +322,7 @@ const Auth = (() => {
   App.onSubmit('auth:login', (form) => work(form, async () => {
     const p = ui.ctx.p, wait = waitLeft(p);
     if (wait) throw new UserError(t('Too many tries. Wait {n} seconds.', { n: wait }));
-    try { await X.login(p, form.elements.password.value); delete fails[p.id]; }
+    try { await X.login(p, form.elements.password.value, !!(form.elements.remember && form.elements.remember.checked)); delete fails[p.id]; }
     catch (e) {
       if (e instanceof UserError && e.message === t('Wrong password.')) { const f = fails[p.id] = fails[p.id] || { n: 0 }; f.n++; if (f.n >= 5) f.until = Date.now() + Math.min(60, Math.pow(2, f.n - 4)) * 1000; }
       throw e;
@@ -291,7 +333,7 @@ const Auth = (() => {
     const d = form.elements;
     if (d.password.value !== d.password2.value) throw new UserError(t('The two passwords do not match.'));
     const r = await X.create({ name: d.name.value, username: d.username.value, password: d.password.value, adopt: d.adopt ? d.adopt.checked : false });
-    show('key', r);
+    show('key', { ...r, remember: !!(d.remember && d.remember.checked) });
   }));
   App.on('auth:copykey', async el => {
     try { await navigator.clipboard.writeText(ui.ctx.text); UI.toast(t('Copied.')); }
@@ -305,7 +347,7 @@ const Auth = (() => {
   App.on('auth:continue', async el => {
     el.disabled = true;
     const r = ui.ctx;
-    try { await enter(r.p, r.dk, r.auth); if (r.adopted) dropLegacy(); }
+    try { await enter(r.p, r.dk, r.auth, { remember: r.remember }); if (r.adopted) dropLegacy(); }
     catch (e) { el.disabled = false; UI.toast(e instanceof UserError ? e.message : t('Something went wrong. Please try again.'), { kind: 'warn' }); }
   });
 
@@ -320,7 +362,7 @@ const Auth = (() => {
     const j = await Sync.join({ server: d.server.value, username: d.username.value, password: d.password.value, recovery: forgot ? d.recovery.value : null,
       exists: n => X.profiles.some(p => p.username.toLowerCase() === n.toLowerCase()) });
     X.profiles.push(j.p); saveList();
-    await enter(j.p, j.dk, j.auth);
+    await enter(j.p, j.dk, j.auth, { remember: !!(d.remember && d.remember.checked) });
   }));
 
   return X;

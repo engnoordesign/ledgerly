@@ -17,6 +17,9 @@ const Seed = (() => {
     ['salary', 'Salary', 'income', 'briefcase', 2], ['freelance', 'Freelance', 'income', 'banknote', 0],
     ['invest', 'Investments', 'income', 'trending-up', 6], ['giftin', 'Gifts received', 'income', 'gift', 4], ['otherin', 'Other income', 'income', 'tag', 10],
   ];
+  // how important each kind of money is, and why it was spent (the demo mixes in some impulse buys)
+  const IMP = { c_housing: 4, c_groceries: 4, c_utilities: 4, c_transport: 3, c_health: 4, c_insurance: 4, c_phone: 4, c_education: 3, c_dining: 2, c_entertainment: 2,
+    c_shopping: 2, c_subscriptions: 2, c_travel: 2, c_gifts: 3, c_otherx: 2, c_salary: 4, c_freelance: 3, c_invest: 2, c_giftin: 1, c_otherin: 1 };
   Seed.categories = () => CATS.map(([k, name, type, icon, ci, bucket]) => ({ id: 'c_' + k, name, sys: true, type, icon, color: P[ci], bucket }));
 
   /** Brand-new user: default categories and one account. */
@@ -67,7 +70,7 @@ const Seed = (() => {
     // scheduled items; auto-posted ones are replayed through the same engine the app uses
     const start = d => `${first}-${U.pad(d)}`;
     const rec = (name, type, usd, accountId, categoryId, day, extra = {}) => ({
-      id: U.uid('r'), name, type, amount: amt(usd), accountId, categoryId, payee: name, note: '', frequency: 'monthly',
+      id: U.uid('r'), name, type, amount: amt(usd), accountId, categoryId, payee: name, note: '', importance: type === 'transfer' ? undefined : IMP[categoryId], frequency: 'monthly',
       startDate: start(day), autoPost: true, active: true, count: 0, ...extra,
     });
     st.recurring = [
@@ -92,8 +95,13 @@ const Seed = (() => {
     const out = st.transactions;
     const add = (date, type, usd, accountId, categoryId, payee, extra = {}) => {
       if (date > today) return;
-      out.push({ id: U.uid('t'), type, date, amount: amt(usd), accountId, categoryId, payee, note: '', tags: [], cleared: date < U.addDays(today, -10), createdAt: Date.now() + out.length, ...extra });
+      const why = PURPOSE[categoryId], low = { c_dining: 0.25, c_shopping: 0.4, c_entertainment: 0.3, c_otherx: 0.5 }[categoryId];
+      out.push({ id: U.uid('t'), type, date, amount: amt(usd), accountId, categoryId, payee, note: '', tags: [], cleared: date < U.addDays(today, -10), createdAt: Date.now() + out.length,
+        purpose: why, importance: low && chance(low) ? 1 : IMP[categoryId], ...extra });
     };
+    const PURPOSE = { c_groceries: t('Weekly groceries'), c_dining: t('Eating out'), c_transport: t('Getting around'), c_shopping: t('Clothes and things for home'), c_entertainment: t('Fun and outings'),
+      c_travel: t('Trip'), c_health: t('Health and medicine'), c_gifts: t('Gifts for family and friends'), c_education: t('Learning'), c_otherx: t('Small cash spending'),
+      c_freelance: t('Side project payment'), c_invest: t('Interest earned') };
     const groceries = [t('Green Basket Market'), t('Corner Grocer'), t('FreshMart'), t('Bulk Warehouse')];
     const diners = [t('Sunrise Café'), t("Luigi's Pizza"), t('Noodle House'), t('Burger Yard'), t('Taco Stand')];
     const shops = [t('Urban Outfit'), t('Tech Hub'), t('HomeGoods Plus'), t('Book Corner')];

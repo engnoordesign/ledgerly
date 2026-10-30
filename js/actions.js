@@ -18,6 +18,7 @@ const A = (() => {
     }
     return null;
   };
+  const normImp = v => { const n = Math.round(+v); return n >= 1 && n <= 4 ? n : undefined; };   // 1 = lowest, 4 = highest
   const build = (t, base) => {
     const tr = t.type === 'transfer';
     return {
@@ -25,6 +26,7 @@ const A = (() => {
       accountId: t.accountId, toAccountId: tr ? t.toAccountId : undefined,
       categoryId: tr ? undefined : (t.categoryId || undefined),
       payee: clean(t.payee), note: clean(t.note), tags: normTags(t.tags), cleared: !!t.cleared,
+      purpose: tr ? undefined : (clean(t.purpose).slice(0, 200) || undefined), importance: tr ? undefined : normImp(t.importance),
       goalId: t.goalId || undefined, recurringId: t.recurringId || undefined,
       recurringIndex: t.recurringIndex != null ? t.recurringIndex : undefined,
       createdAt: (base && base.createdAt) || Date.now(),
@@ -188,6 +190,7 @@ const A = (() => {
         name, type: r.type, amount: Math.round(r.amount), accountId: r.accountId, toAccountId: r.type === 'transfer' ? r.toAccountId : undefined,
         categoryId: r.type === 'transfer' ? undefined : (r.categoryId || undefined), payee: clean(r.payee) || name, note: clean(r.note),
         goalId: r.type === 'transfer' ? (r.goalId || undefined) : undefined,
+        purpose: r.type === 'transfer' ? undefined : (clean(r.purpose).slice(0, 200) || undefined), importance: r.type === 'transfer' ? undefined : normImp(r.importance),
         frequency: r.frequency, startDate: r.startDate, endDate: r.endDate || undefined, autoPost: !!r.autoPost, active: r.active !== false,
       };
       if (id) {
@@ -209,7 +212,7 @@ const A = (() => {
     if (!st.transactions.some(t => t.recurringId === r.id && t.recurringIndex === idx)) {
       st.transactions.push(build({
         type: r.type, date, amount: amount || r.amount, accountId: r.accountId, toAccountId: r.toAccountId, categoryId: r.categoryId,
-        payee: r.payee || r.name, note: r.note, goalId: r.goalId, recurringId: r.id, recurringIndex: idx,
+        payee: r.payee || r.name, note: r.note, purpose: r.purpose, importance: r.importance, goalId: r.goalId, recurringId: r.id, recurringIndex: idx,
       }));
     }
     r.count = idx + 1; r.lastPosted = date;
@@ -249,10 +252,10 @@ const A = (() => {
 
   A.exportCsv = (list = Q.sorted()) => {
     const accs = Q.accMap(), cats = Q.catMap();
-    const rows = [['Date', 'Type', 'Account', 'To account', 'Category', 'Payee', 'Note', 'Tags', 'Amount', 'Cleared']];
+    const rows = [['Date', 'Type', 'Account', 'To account', 'Category', 'Payee', 'Note', 'Purpose', 'Importance (1-4)', 'Tags', 'Amount', 'Cleared']];
     for (const t of list) rows.push([
       t.date, t.type, (accs.get(t.accountId) || {}).name, t.type === 'transfer' ? (accs.get(t.toAccountId) || {}).name : '',
-      (cats.get(t.categoryId) || {}).name || '', t.payee, t.note, (t.tags || []).join(' '),
+      (cats.get(t.categoryId) || {}).name || '', t.payee, t.note, t.purpose || '', t.importance || '', (t.tags || []).join(' '),
       ((t.type === 'expense' ? -1 : 1) * t.amount / U.currency().pow).toFixed(U.currency().digits), t.cleared ? 'yes' : 'no',
     ]);
     return U.csv(rows);

@@ -137,6 +137,11 @@ const UI = (() => {
   UI.txTitle = x => x.payee || x.note || (x.type === 'transfer' ? t('Transfer') : x.type === 'income' ? t('Income') : Q.catName(Q.cat(x.categoryId)));
   UI.txIcon = x => x.type === 'transfer'
     ? h`<span class="cico sq" style="--c:#64748b;--s:36px">${UI.icon('swap', 19)}</span>` : UI.catIcon(Q.cat(x.categoryId) || { color: '#64748b', icon: x.type === 'income' ? 'banknote' : 'tag' }, 36);
+  /** Four dots, filled up to the importance level. Never relies on colour alone. */
+  UI.imp = x => {
+    const lab = Q.importanceLabel(x.type, x.importance);
+    return h`<span class="imp l${x.importance}" data-tip="${lab}" role="img" aria-label="${t('Importance: {level}', { level: lab })}">${[1, 2, 3, 4].map(n => h`<i class="${n <= x.importance ? 'on' : ''}"></i>`)}</span>`;
+  };
   UI.txAmount = x => h`<b class="num amt ${x.type}">${x.type === 'income' ? '+' : x.type === 'expense' ? '−' : ''}${money(x.amount)}</b>`;
   /** One transaction row. opts: {date, select, actions} */
   UI.txRow = (x, o = {}) => {
@@ -147,9 +152,9 @@ const UI = (() => {
     return h`<div class="txr${o.select ? ' sel' : ''}" data-id="${x.id}" data-act="tx:edit">
       ${o.select ? h`<label class="chk" data-act="noop"><input type="checkbox" data-change="tx:pick" data-id="${x.id}" ${o.picked ? 'checked' : ''} aria-label="${t('Select')}"><i></i></label>` : ''}
       ${UI.txIcon(x)}
-      <div class="tx-main"><b class="tx-title">${UI.txTitle(x)}</b><span class="tx-meta">${meta}${(x.tags || []).slice(0, 2).map(g => h`<span class="tag">#${g}</span>`)}${future ? h`<span class="pill info">${t('Scheduled')}</span>` : ''}</span></div>
+      <div class="tx-main"><b class="tx-title">${UI.txTitle(x)}</b><span class="tx-meta">${meta}${x.purpose ? h`<span class="purpose">${x.purpose}</span>` : ''}${(x.tags || []).slice(0, 2).map(g => h`<span class="tag">#${g}</span>`)}${future ? h`<span class="pill info">${t('Scheduled')}</span>` : ''}</span></div>
       ${o.date ? h`<span class="tx-date">${o.date === 'rel' ? U.relDay(x.date) : U.fmtDate(x.date, 'short')}</span>` : ''}
-      ${UI.txAmount(x)}
+      ${x.importance && x.type !== 'transfer' ? UI.imp(x) : ''}${UI.txAmount(x)}
       ${o.actions ? h`<div class="tx-actions">
         <button type="button" class="btn icon ghost sm${x.cleared ? ' on' : ''}" data-act="tx:clear" data-id="${x.id}" data-tip="${x.cleared ? t('Cleared') : t('Mark as cleared')}">${UI.icon('check', 15)}</button>
         <button type="button" class="btn icon ghost sm" data-act="tx:edit" data-id="${x.id}" data-tip="${t('Edit')}">${UI.icon('edit', 15)}</button>

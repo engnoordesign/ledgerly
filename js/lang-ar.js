@@ -291,6 +291,29 @@ I18N.dicts.ar = {
   "The server refused the request ({code}).": "رفض الخادم الطلب ({code}).", "Create a new recovery key first, then turn sync on.": "أنشئ مفتاح استرداد جديدًا أولًا، ثم فعّل المزامنة.",
   "Connect to the internet to do this for a synced profile.": "اتصل بالإنترنت لإجراء ذلك لملف مُزامَن.", "Connect to the internet to reset the password of a synced profile.": "اتصل بالإنترنت لإعادة تعيين كلمة مرور ملف مُزامَن.",
 
+  /* purpose and importance */
+  "Importance": "الأهمية", "Importance: {level}": "الأهمية: {level}", "Any importance": "أي درجة أهمية", "Not set": "غير محدد",
+  "Essential": "أساسي", "Important": "مهم", "Nice to have": "كمالي", "Not needed": "غير ضروري", "Helpful": "مفيد", "Extra": "إضافي",
+  "Something you must pay for, like rent, food or bills": "شيء لا بد من دفعه، كالإيجار والطعام والفواتير", "Matters a lot, but could wait a little": "مهم جدًا، لكنه يحتمل التأجيل قليلًا",
+  "Pleasant, but you could do without it": "ممتع، لكن يمكنك الاستغناء عنه", "An impulse, or something you did not really need": "شراء اندفاعي أو شيء لم تكن بحاجة إليه فعلًا",
+  "Money you rely on to live": "مال تعتمد عليه في معيشتك", "A regular, planned source": "مصدر منتظم ومخطَّط له", "A welcome extra": "إضافة مرحَّب بها", "A one-off or unexpected bonus": "مبلغ لمرة واحدة أو مكافأة غير متوقعة",
+  "What did you spend it on?": "فيمَ أنفقته؟", "What is this income for?": "ما الغرض من هذا الدخل؟", "What is it for?": "ما الغرض منه؟",
+  "e.g. School fees, car repair, birthday gift": "مثال: رسوم المدرسة، إصلاح السيارة، هدية عيد ميلاد", "e.g. March salary, selling my old phone": "مثال: راتب مارس، بيع هاتفي القديم",
+  "Spending by importance": "الإنفاق حسب الأهمية", "Income by importance": "الدخل حسب الأهمية", "Darker means more important.": "اللون الأغمق يعني أهمية أكبر.",
+  "Nothing marked yet": "لا شيء محدد بعد", "Choose an importance when you add an entry and it is summarised here.": "اختر درجة الأهمية عند إضافة قيد وسيظهر ملخصها هنا.",
+  "{pct} of your spending was marked “Not needed”": "تم تصنيف {pct} من إنفاقك على أنه «غير ضروري»", "That is {amount} you could keep.": "هذا مبلغ {amount} يمكنك الاحتفاظ به.",
+  "Weekly groceries": "مشتريات البقالة الأسبوعية", "Eating out": "الأكل خارج المنزل", "Getting around": "التنقل", "Clothes and things for home": "ملابس وأغراض للمنزل", "Fun and outings": "ترفيه ونزهات",
+  "Trip": "رحلة", "Health and medicine": "الصحة والدواء", "Gifts for family and friends": "هدايا للعائلة والأصدقاء", "Learning": "التعلّم", "Small cash spending": "مصروفات نقدية صغيرة",
+  "Side project payment": "دفعة من مشروع جانبي", "Interest earned": "فوائد مكتسبة",
+
+  /* stay signed in */
+  "Keep me signed in on this device": "أبقِني مسجّلًا للدخول على هذا الجهاز", "Stay signed in on this device": "البقاء مسجّلًا للدخول على هذا الجهاز", "Signed in": "مسجّل الدخول", "Sign out": "تسجيل الخروج",
+  "Anyone who can open Ledgerly on this device can see this profile. Turn it off on shared or public computers.": "كل من يستطيع فتح ليدجرلي على هذا الجهاز يستطيع رؤية هذا الملف. أوقف هذا الخيار على الأجهزة المشتركة أو العامة.",
+  "Auto-lock is off while this device stays signed in.": "القفل التلقائي متوقف طالما بقي هذا الجهاز مسجّلًا للدخول.",
+  "This device will stay signed in.": "سيبقى هذا الجهاز مسجّلًا للدخول.", "This device will ask for the password again.": "سيطلب هذا الجهاز كلمة المرور مجددًا.",
+  "This browser could not keep you signed in.": "تعذّر على هذا المتصفح إبقاءك مسجّلًا للدخول.",
+  "This browser could not keep you signed in. You will be asked for the password next time.": "تعذّر على هذا المتصفح إبقاءك مسجّلًا للدخول. ستُسأل عن كلمة المرور في المرة القادمة.",
+
   /* currencies */
   "US Dollar": "دولار أمريكي", "Euro": "يورو", "British Pound": "جنيه إسترليني", "Saudi Riyal": "ريال سعودي", "UAE Dirham": "درهم إماراتي", "Egyptian Pound": "جنيه مصري",
   "Kuwaiti Dinar": "دينار كويتي", "Qatari Riyal": "ريال قطري", "Bahraini Dinar": "دينار بحريني", "Omani Rial": "ريال عماني", "Jordanian Dinar": "دينار أردني", "Moroccan Dirham": "درهم مغربي",

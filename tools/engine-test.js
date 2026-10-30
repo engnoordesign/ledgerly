@@ -135,10 +135,37 @@ eq(parsed.errors.length, 1, 'csv bad row reported');
 eq(parsed.rows[0].type, 'expense', 'negative amount is expense');
 eq(parsed.rows[1].amount, 120000, 'csv amount with thousands separator');
 
+/* ---- purpose and importance ---- */
+ok(run(`S.state.transactions.filter(x => x.importance).length`) > 400, 'demo entries carry an importance');
+ok(run(`S.state.transactions.filter(x => x.purpose).length`) > 200, 'demo entries carry a purpose');
+eq(run(`S.state.transactions.filter(x => x.type === 'transfer').every(x => x.importance === undefined && x.purpose === undefined)`), true, 'transfers never carry importance or purpose');
+const cmk = run(`U.curMonth()`);
+eq(run(`U.sum([...Q.month('${cmk}').impExp.values()])`), run(`Q.month('${cmk}').expense`), 'expense by importance sums to total expense');
+eq(run(`U.sum([...Q.month('${cmk}').impInc.values()])`), run(`Q.month('${cmk}').income`), 'income by importance sums to total income');
+ok(run(`Q.filter({ importance: '4', type: 'expense' }).length`) > 50 && run(`Q.filter({ importance: '4' }).every(x => x.importance === 4 && x.type !== 'transfer')`), 'the importance filter returns only that level');
+eq(run(`Q.filter({ importance: 'none' }).every(x => !x.importance)`), true, 'the "not set" filter works');
+run(`A.addTx({ type: 'expense', amount: 1000, date: U.today(), accountId: 'a_chk', categoryId: 'c_dining', payee: 'ImpTest', purpose: '  Birthday dinner for Mum  ', importance: '3' })`);
+const imp1 = run(`S.state.transactions.find(x => x.payee === 'ImpTest')`);
+eq(String([imp1.purpose, imp1.importance]), 'Birthday dinner for Mum,3', 'purpose is trimmed and importance is stored as a number');
+run(`A.addTx({ type: 'expense', amount: 1000, date: U.today(), accountId: 'a_chk', payee: 'ImpBad', importance: 9 })`);
+eq(run(`S.state.transactions.find(x => x.payee === 'ImpBad').importance`), undefined, 'an out-of-range importance is dropped');
+run(`A.addTx({ type: 'transfer', amount: 1000, date: U.today(), accountId: 'a_chk', toAccountId: 'a_sav', purpose: 'x', importance: 4 })`);
+eq(run(`S.state.transactions.filter(x => x.type === 'transfer').sort((a, b) => b.createdAt - a.createdAt)[0].importance`), undefined, 'a transfer ignores importance');
+eq(run(`Q.filter({ q: 'birthday dinner' }).length`), 1, 'search finds text typed in the purpose');
+ok(run(`Q.filter({ q: 'nice to have' }).length`) > 10, 'search finds entries by their importance word');
+ok(/Birthday dinner for Mum/.test(run(`A.exportCsv(Q.filter({ q: 'ImpTest' }))`)) && /Importance \(1-4\)/.test(run(`A.exportCsv([])`)), 'CSV export includes purpose and importance');
+ok(run(`Q.purposes().has('birthday dinner for mum')`), 'typed purposes are remembered for quick re-use');
+eq(String(run(`Q.importance('expense').map(i => i.level)`)), '4,3,2,1', 'the scale has four levels, most important first');
+ok(run(`Q.importance('income')[3].label !== Q.importance('expense')[3].label`), 'income and expenses use different wording');
+const gymId = run(`A.saveRecurring({ name: 'Gym', type: 'expense', amount: 3000, accountId: 'a_chk', categoryId: 'c_health', frequency: 'monthly', startDate: U.addDays(U.today(), -1), autoPost: true, purpose: 'Stay fit', importance: 3 }).id`);
+run(`A.postDue(S.state)`);
+const gym = run(`S.state.transactions.find(x => x.recurringId === '${gymId}')`);
+eq(String([gym.purpose, gym.importance]), 'Stay fit,3', 'a scheduled item posts with its purpose and importance');
+
 // ---- Arabic ----
 if (run(`!!I18N.dicts.ar`)) {
   run(`S.state.settings.lang = 'ar'; S.applySettings(); I18N.missing.clear();`);
-  run(`Q.insights(U.curMonth()); Q.health(U.curMonth()); Q.plans(); Q.buildPlan(Q.plans()[0], ${income});`);
+  run(`Q.importance('income'); Q.importance('expense'); Q.insights(U.curMonth()); Q.health(U.curMonth()); Q.plans(); Q.buildPlan(Q.plans()[0], ${income});`);
   const miss = run(`[...I18N.missing]`);
   ok(miss.length === 0, 'engine strings translated to Arabic' + (miss.length ? ': ' + miss.join(' | ') : ''));
   eq(run(`I18N.count(2, 'day')`), 'يومان', 'arabic dual');

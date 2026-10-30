@@ -90,6 +90,19 @@ const Vault = (() => {
     return { salt: b64(salt), iter: V.ITER, auth: pw.auth, pwWrap: await V.seal(pw.kek, dk) };
   };
 
+  /* ---------- device key: lets a trusted device reopen a profile without typing the password ---------- */
+  /** A key the browser keeps but can never reveal (non-extractable), so it cannot be copied out of storage. */
+  V.newDeviceKey = () => subtle().generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  V.sealWithKey = async (key, text) => {
+    const iv = V.random(12), ct = await subtle().encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
+    return `v1.${b64(iv)}.${b64(ct)}`;
+  };
+  V.openWithKey = async (key, sealed) => {
+    const [v, iv, ct] = String(sealed).split('.');
+    if (v !== 'v1' || !iv || !ct) throw new Error('BAD_FORMAT');
+    try { return dec.decode(await subtle().decrypt({ name: 'AES-GCM', iv: unb64(iv) }, key, unb64(ct))); } catch (e) { throw new Error('BAD_KEY'); }
+  };
+
   /** Rough 0 to 4 guide for the sign-up form. Not a security boundary. */
   V.strength = password => {
     const p = String(password || '');

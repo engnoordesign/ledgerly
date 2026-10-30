@@ -2,7 +2,7 @@
 const TransactionsView = (() => {
   const V = {};
   const { h, money } = U;
-  const fresh = () => ({ q: '', type: '', accountId: '', categoryId: '', range: 'cur', from: '', to: '', limit: 100, picked: new Set() });
+  const fresh = () => ({ q: '', type: '', accountId: '', categoryId: '', importance: '', range: 'cur', from: '', to: '', limit: 100, picked: new Set() });
   V.f = fresh();
 
   const rangeOptions = () => {
@@ -25,7 +25,7 @@ const TransactionsView = (() => {
   };
   const results = () => {
     const f = V.f, [from, to] = rangeDates();
-    return Q.filter({ q: f.q, type: f.type, accountId: f.accountId, categoryId: f.categoryId, from, to });
+    return Q.filter({ q: f.q, type: f.type, accountId: f.accountId, categoryId: f.categoryId, importance: f.importance, from, to });
   };
 
   const resultsHtml = () => {
@@ -75,6 +75,7 @@ const TransactionsView = (() => {
         <select id="tx-range" data-change="tx:range" aria-label="${t('Date range')}">${UI.options(rangeOptions(), f.range)}</select>
         <select id="tx-acc" data-change="tx:acc" aria-label="${t('Account')}">${UI.accountOptions(f.accountId, { blank: t('All accounts'), all: true })}</select>
         <select id="tx-cat" data-change="tx:cat" aria-label="${t('Category')}">${UI.options([...Q.cats('expense', true), ...Q.cats('income', true)].map(c => [c.id, Q.catName(c)]), f.categoryId, t('All categories'))}</select>
+        <select id="tx-imp" data-change="tx:imp" aria-label="${t('Importance')}">${UI.options([...Q.importance(f.type === 'income' ? 'income' : 'expense').map(i => [i.level, i.label]), ['none', t('Not set')]], f.importance, t('Any importance'))}</select>
         ${f.range === 'custom' ? h`<div class="range-in"><input type="date" id="tx-from" data-change="tx:from" value="${f.from}" aria-label="${t('From')}"><span>\u2192</span><input type="date" id="tx-to" data-change="tx:to" value="${f.to}" aria-label="${t('To')}"></div>` : ''}
       </div>
       <div id="tx-bulk">${bulkHtml()}</div>
@@ -95,6 +96,7 @@ const TransactionsView = (() => {
     if (params.get('acc')) V.f.accountId = params.get('acc');
     if (params.get('month')) V.f.range = 'm:' + params.get('month');
     if (params.get('type')) V.f.type = params.get('type');
+    if (params.get('imp')) V.f.importance = params.get('imp');
     if (params.get('q')) V.f.q = params.get('q');
   };
 
@@ -103,6 +105,7 @@ const TransactionsView = (() => {
   App.onChange('tx:range', el => apply(f => { f.range = el.value; }));
   App.onChange('tx:acc', el => apply(f => { f.accountId = el.value; }));
   App.onChange('tx:cat', el => apply(f => { f.categoryId = el.value; }));
+  App.onChange('tx:imp', el => apply(f => { f.importance = el.value; }));
   App.onChange('tx:from', el => apply(f => { f.from = el.value; }));
   App.onChange('tx:to', el => apply(f => { f.to = el.value; }));
   App.on('tx:reset', () => { V.f = fresh(); App.render(); });
