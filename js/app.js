@@ -2,10 +2,14 @@
 /* App shell: routing, navigation chrome, global events, boot. */
 (() => {
   const { h } = U;
+  // main pages first; the rest sit under "More" so the everyday screens stay simple
   const NAV = () => [
-    ['dashboard', 'grid', t('Dashboard')], ['transactions', 'receipt', t('Transactions')], ['budget', 'pie', t('Budget')], ['plans', 'sparkles', t('Plans')],
-    ['stats', 'chart', t('Statistics')], ['goals', 'target', t('Goals')], ['accounts', 'wallet', t('Accounts')], ['scheduled', 'repeat', t('Scheduled')], ['settings', 'settings', t('Settings')],
+    ['dashboard', 'grid', t('Home')], ['transactions', 'receipt', t('Transactions')], ['stats', 'chart', t('Statistics')], ['budget', 'pie', t('Budget')],
+    ['data', 'download', t('Import & Export')], ['settings', 'settings', t('Settings')],
   ];
+  const MORE = () => [['accounts', 'wallet', t('Accounts')], ['goals', 'target', t('Goals')], ['scheduled', 'repeat', t('Scheduled')], ['plans', 'sparkles', t('Plans')]];
+  const ALL = () => [...NAV(), ...MORE()];
+  const sideMore = () => { try { return localStorage.getItem('ledgerly:side-more') === '1'; } catch (e) { return false; } };
 
   App.route = () => {
     const [path, qs] = location.hash.replace(/^#\/?/, '').split('?');
@@ -19,20 +23,24 @@
   /* ---------- chrome ---------- */
   const renderShell = name => {
     if (!S.state) return;
-    const nav = NAV(), s = S.state.settings, meta = S.state.meta;
+    const link = (k, ic, l) => h`<a href="#/${k}" class="${k === name ? 'on' : ''}" ${k === name ? 'aria-current="page"' : ''}>${UI.icon(ic, 19)}<span>${l}</span></a>`;
+    const nav = NAV(), more = MORE(), s = S.state.settings, meta = S.state.meta, inMore = more.some(m => m[0] === name);
     const backupAge = meta.lastBackup ? U.diffDays(meta.lastBackup, U.today()) : null;
     const nudge = !S.state.transactions.length ? '' : meta.demo
       ? h`<a class="nudge" href="#/settings">${UI.icon('sparkles', 14)}<span>${t('Sample data')}</span></a>`
       : (backupAge == null || backupAge > 30) ? h`<a class="nudge warn" href="#/settings">${UI.icon('download', 14)}<span>${t('Back up your data')}</span></a>` : '';
     U.$('#sidebar').innerHTML = String(h`
       <a class="brand" href="#/dashboard" aria-label="Ledgerly"><svg class="logo" width="30" height="30" aria-hidden="true"><use href="#logo"/></svg><span>Ledgerly</span></a>
-      <nav aria-label="${t('Main')}">${nav.map(([k, ic, l]) => h`<a href="#/${k}" class="${k === name ? 'on' : ''}" ${k === name ? 'aria-current="page"' : ''}>${UI.icon(ic, 19)}<span>${l}</span></a>`)}</nav>
+      <nav aria-label="${t('Main')}">${nav.slice(0, -1).map(([k, ic, l]) => link(k, ic, l))}
+        <details class="side-more" data-side-more ${inMore || sideMore() ? 'open' : ''}><summary>${UI.icon('menu', 19)}<span>${t('More')}</span></summary>${more.map(([k, ic, l]) => link(k, ic, l))}</details>
+        ${link(...nav[nav.length - 1])}</nav>
       <div class="side-foot">${nudge}${AccountView.chip()}
         <div class="toggles"><button class="btn icon ghost side" data-act="set:lang" data-v="${s.lang === 'ar' ? 'en' : 'ar'}" data-tip="${s.lang === 'ar' ? 'English' : 'العربية'}" aria-label="${s.lang === 'ar' ? 'English' : 'العربية'}"><b>${s.lang === 'ar' ? 'EN' : 'ع'}</b></button>
           <button class="btn icon ghost side" data-act="app:theme" data-tip="${effectiveDark() ? t('Switch to light mode') : t('Switch to dark mode')}" aria-label="${effectiveDark() ? t('Switch to light mode') : t('Switch to dark mode')}">${UI.icon(effectiveDark() ? 'sun' : 'moon', 18)}</button></div></div>`);
     U.$('#topbar').innerHTML = String(h`
       <a class="brand sm" href="#/dashboard" aria-label="Ledgerly"><svg class="logo" width="28" height="28" aria-hidden="true"><use href="#logo"/></svg><span>Ledgerly</span></a>
       <div class="top-actions">${AccountView.topButton()}
+        <button class="btn ghost icon" data-act="app:qr" aria-label="${t('Open on another device')}">${UI.icon('qr', 18)}</button>
         <button class="btn ghost icon" data-act="set:lang" data-v="${s.lang === 'ar' ? 'en' : 'ar'}" aria-label="${s.lang === 'ar' ? 'English' : 'العربية'}"><b>${s.lang === 'ar' ? 'EN' : 'ع'}</b></button>
         <button class="btn ghost icon" data-act="app:theme" aria-label="${effectiveDark() ? t('Switch to light mode') : t('Switch to dark mode')}">${UI.icon(effectiveDark() ? 'sun' : 'moon', 18)}</button>
       </div>`);
@@ -41,15 +49,16 @@
     U.$('#tabbar').innerHTML = String(h`
       ${tabs.map(([k, ic, l]) => h`<a href="#/${k}" class="${k === name ? 'on' : ''}">${UI.icon(ic, 22)}<span>${l}</span></a>`)}
       <button class="fab" data-act="tx:new" aria-label="${t('New transaction')}">${UI.icon('plus', 26)}</button>
-      <a href="#/budget" class="${name === 'budget' ? 'on' : ''}">${UI.icon('pie', 22)}<span>${t('Budget')}</span></a>
-      <button class="${['plans', 'stats', 'goals', 'accounts', 'scheduled', 'settings'].includes(name) ? 'on' : ''}" data-act="app:more">${UI.icon('menu', 22)}<span>${t('More')}</span></button>`);
+      <a href="#/stats" class="${name === 'stats' ? 'on' : ''}">${UI.icon('chart', 22)}<span>${t('Reports')}</span></a>
+      <button class="${!['dashboard', 'transactions', 'stats'].includes(name) ? 'on' : ''}" data-act="app:more">${UI.icon('menu', 22)}<span>${t('More')}</span></button>`);
   };
   App.refreshChrome = () => { if (S.state) renderShell(App.route().name); };
   App.on('app:theme', () => S.commit(st => { st.settings.theme = effectiveDark() ? 'light' : 'dark'; }, { settings: true }));
   App.on('app:more', () => {
-    const items = NAV().filter(([k]) => !['dashboard', 'transactions', 'budget'].includes(k));
-    const ctl = UI.modal({ title: t('More'), size: 'sheet', body: h`<nav class="more-nav">${items.map(([k, ic, l]) => h`<a href="#/${k}" data-close>${UI.icon(ic, 22)}<span>${l}</span></a>`)}</nav>` });
-    ctl.el.addEventListener('click', e => { if (e.target.closest('a')) ctl.close(); });
+    const items = ALL().filter(([k]) => !['dashboard', 'transactions', 'stats'].includes(k));
+    const ctl = UI.modal({ title: t('More'), size: 'sheet', body: h`<nav class="more-nav">${items.map(([k, ic, l]) => h`<a href="#/${k}" data-close>${UI.icon(ic, 22)}<span>${l}</span></a>`)}
+      <button type="button" data-act="app:qr">${UI.icon('qr', 22)}<span>${t('Open on another device')}</span></button></nav>` });
+    ctl.el.addEventListener('click', e => { if (e.target.closest('.more-nav a, .more-nav button')) ctl.close(); });
   });
 
   /* ---------- render ---------- */
@@ -78,7 +87,7 @@
       console.error(err);
       root.innerHTML = `<div class="empty"><b>Something went wrong</b><p>${U.esc(err.message)}</p><button class="btn" data-act="app:reload">Reload</button></div>`;
     }
-    document.title = `${(NAV().find(n => n[0] === r.name) || [0, 0, 'Ledgerly'])[2]} · Ledgerly`;
+    document.title = `${(ALL().find(n => n[0] === r.name) || [0, 0, 'Ledgerly'])[2]} · Ledgerly`;
     if (sameRoute) { window.scrollTo(0, y); restoreFocus(focus); } else window.scrollTo(0, 0);
     lastRoute = r.name;
   };
@@ -142,6 +151,9 @@
     }
   });
 
+  document.addEventListener('toggle', e => {
+    if (e.target.matches && e.target.matches('[data-side-more]')) { try { localStorage.setItem('ledgerly:side-more', e.target.open ? '1' : '0'); } catch (err) { /* ignore */ } }
+  }, true);
   App.on('noop', () => {});
   App.on('app:reload', () => location.reload());
 

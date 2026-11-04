@@ -115,7 +115,7 @@ const Auth = (() => {
     await X.lock();
     ls.del(K.KEY_DATA + p.id);
     X.profiles = X.profiles.filter(x => x.id !== p.id); saveList();
-    show('pick');
+    show(firstView());
   };
 
   /* ---------- stay signed in on this device ----------
@@ -164,7 +164,7 @@ const Auth = (() => {
     S.detach();
     for (const id of ['view', 'sidebar', 'topbar', 'tabbar']) U.$('#' + id).innerHTML = '';   // nothing financial stays in the page
     UI.closeAll(); U.$('#app').hidden = true;
-    show(X.profiles.length ? 'pick' : 'create');
+    show(firstView());
   };
   // another tab changed this profile's data: pick up its version
   window.addEventListener('storage', async e => {
@@ -175,21 +175,68 @@ const Auth = (() => {
     }
   });
 
+  /* ---------- online (the app is served by a Ledgerly server, e.g. on Cloudflare) ----------
+     Then the server is simply this site: people sign in with a username and password, and a new account is created
+     on the server at the same time, so the same login works on every device. */
+  X.hosted = null; X.hostInfo = {};
+  const HOST_KEY = 'ledgerly:hosted';
+  const detectHost = async () => {
+    if (!/^https?:$/.test(location.protocol)) return;
+    const origin = location.origin;
+    try {
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 5000);
+      const r = await fetch(origin + '/api/info', { cache: 'no-store', signal: ctl.signal }); clearTimeout(to);
+      const j = r.ok ? await r.json() : null;
+      if (j && j.app === 'ledgerly-server') { X.hosted = origin; X.hostInfo = j; try { localStorage.setItem(HOST_KEY, origin); } catch (e) { /* ignore */ } return; }
+      if (r.status === 503) { X.hosted = origin; X.hostInfo = { notConfigured: true }; return; }
+      ls.del(HOST_KEY);
+    } catch (e) { if (ls.get(HOST_KEY) === origin) { X.hosted = origin; X.hostInfo = { offline: true }; } }   // offline: keep the online layout
+  };
+  const firstView = () => (X.profiles.length || X.hosted ? 'signin' : 'create');
+
   /* ---------- start ---------- */
   X.start = async () => {
     applyDeviceUi();
     if (!Vault.available()) return show('nocrypto');
     loadList();
     const s = readSession(), p = s && byId(s.pid);
-    if (p) { try { await enter(p, Vault.unb64(s.dk), s.secret); return; } catch (e) { ss.del(K.KEY_SESSION); } }
+    if (p) { try { await enter(p, Vault.unb64(s.dk), s.secret); detectHost(); return; } catch (e) { ss.del(K.KEY_SESSION); } }
     const last = byId(X.last);   // a profile this device was told to keep signed in
-    if (last && last.remember) { try { await X.resume(last); return; } catch (e) { X.forget(last); } }
-    show(X.profiles.length ? 'pick' : 'create');
+    if (last && last.remember) { try { await X.resume(last); detectHost(); return; } catch (e) { X.forget(last); } }
+    await detectHost();
+    show(firstView());
+  };
+
+  /** Sign in with a username and password: a profile on this device first, otherwise the online account. */
+  X.signIn = async (username, password, remember) => {
+    username = normUser(username);
+    if (!username) throw new UserError(t('Enter your username.'));
+    if (!password) throw new UserError(t('Enter your password.'));
+    const p = X.profiles.find(x => x.username.toLowerCase() === username.toLowerCase());
+    if (p) {
+      try { await X.login(p, password, remember); return; }
+      catch (e) {
+        if (!(e instanceof UserError) || !p.sync || !p.sync.server) throw e;
+        // the password may have been changed on another device: try the account on the server
+        let j;
+        try { j = await Sync.join({ server: p.sync.server, username: p.sync.username || p.username, password, exists: () => false }); }
+        catch (e2) { throw e2 instanceof UserError ? new UserError(t('Wrong username or password.')) : e; }
+        X.forget(p); ls.del(K.KEY_DATA + p.id);
+        X.profiles = X.profiles.filter(x => x.id !== p.id); X.profiles.push(j.p); saveList();
+        await enter(j.p, j.dk, j.auth, { remember });
+        return;
+      }
+    }
+    if (!X.hosted) throw new UserError(t('There is no profile with that username on this device.'));
+    if (X.hostInfo.notConfigured) throw new UserError(t('The online service is not set up yet.'));
+    const j = await Sync.join({ server: X.hosted, username, password, exists: () => false });
+    X.profiles.push(j.p); saveList();
+    await enter(j.p, j.dk, j.auth, { remember });
   };
 
   /* ---------- lock screen ---------- */
   const mount = () => U.$('#auth');
-  let ui = { view: 'pick', ctx: {}, busy: false };
+  let ui = { view: 'signin', ctx: {}, busy: false };
   const dark = () => { const th = document.documentElement.dataset.theme; return th === 'dark' || (!th && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches); };
   function applyDeviceUi() {
     const lang = ls.get(K.KEY_LANG) === 'ar' ? 'ar' : 'en', theme = ls.get(K.KEY_THEME);
@@ -203,37 +250,42 @@ const Auth = (() => {
   const link = (act, label, extra = '') => h`<button type="button" class="link" data-act="${act}" ${extra ? U.raw(extra) : ''}>${label}</button>`;
   const err = () => h`<div class="form-error" role="alert" hidden></div>`;
   const stay = () => X.canRemember() ? h`<label class="check stay"><input type="checkbox" name="remember" checked><span>${t('Keep me signed in on this device')}</span></label>` : '';
+  const userField = (value, focus) => h`<div class="field"><label for="au-user">${t('Username')}</label><input id="au-user" name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" dir="ltr" value="${value || ''}" ${focus ? 'autofocus' : ''} required></div>`;
   const defaultServer = () => ls.get('ledgerly:server') || (/^https?:$/.test(location.protocol) ? location.origin : '');
+  const lastUser = () => { const p = byId(X.last) || X.profiles[0]; return p ? p.username : ''; };
+  const offlineNote = () => X.hostInfo.offline ? h`<div class="notice warn">${UI.icon('cloud', 15)}<span>${t('You are offline. Profiles already on this device still open; new sign-ins need the internet.')}</span></div>`
+    : X.hostInfo.notConfigured ? h`<div class="notice warn">${UI.icon('alert', 15)}<span>${t('The online service is not set up yet.')}</span></div>` : '';
 
   const views = {
     nocrypto: () => h`<div class="keyscreen">${UI.icon('lock', 28)}<h1>${t('Encryption is not available here')}</h1>
       <p class="sub">${t('Your browser only turns on encryption for secure pages. Open Ledgerly from its desktop icon, from an https:// address, or from http://localhost.')}</p></div>`,
 
-    pick: () => h`<h1>${t('Who is using Ledgerly?')}</h1><p class="sub">${t('Choose a profile to unlock it. Each profile has its own password and its own data.')}</p>
-      <div class="profile-grid">${X.profiles.map(p => h`<button type="button" class="ptile" data-act="auth:select" data-id="${p.id}">${avatar(p, 60)}<b>${p.name}</b><small>${X.at(p.username)}</small>${p.remember ? h`<span class="pill">${t('Signed in')}</span>` : ''}${p.sync && p.sync.enabled !== false ? h`<span class="pill info">${t('Synced')}</span>` : ''}</button>`)}
-        <button type="button" class="ptile add" data-act="auth:new"><span class="avatar plus" style="--s:60px">${UI.icon('plus', 24)}</span><b>${t('Add profile')}</b></button></div>
-      ${links(link('auth:server', `${t('Sign in from another device')}`))}`,
-
-    login: () => { const p = ui.ctx.p; return h`<form id="auf" data-submit="auth:login" novalidate>${avatar(p, 76)}<h1>${p.name}</h1><p class="sub">${X.at(p.username)}</p>
-      <div class="field"><label for="au-pass">${t('Password')}</label>${pw('au-pass', 'password', 'current-password', true)}</div>${err()}
+    signin: () => { const u = ui.ctx.username != null ? ui.ctx.username : lastUser(); return h`<form id="auf" data-submit="auth:signin" novalidate>
+      <h1>${t('Sign in')}</h1>
+      <p class="sub">${X.hosted ? t('Use your username and password. It works on any phone, tablet or computer.') : t('Enter the username and password of a profile on this device.')}</p>
+      ${offlineNote()}
+      ${userField(u, !u)}
+      <div class="field"><label for="au-pass">${t('Password')}</label>${pw('au-pass', 'password', 'current-password', !!u)}</div>${err()}
       ${stay()}
-      <button class="btn primary wide" type="submit">${UI.icon('lock', 16)}<span>${t('Unlock')}</span></button>
-      ${links(link('auth:forgot', t('Forgot password?'), `data-id="${p.id}"`), link('auth:back', t('Switch profile')))}</form>`; },
+      <button class="btn primary wide" type="submit">${UI.icon('lock', 16)}<span>${t('Sign in')}</span></button>
+      ${X.profiles.length > 1 ? h`<div class="known"><small class="muted">${t('On this device')}</small>${X.profiles.map(p => h`<button type="button" class="chipbtn" data-act="auth:fill" data-u="${p.username}">${avatar(p, 20)}<span>${p.name}</span></button>`)}</div>` : ''}
+      ${links(link('auth:new', X.hosted ? t('Create an account') : t('Create a profile')), link('auth:forgot', t('Forgot password?')), X.hosted ? '' : link('auth:server', t('Use an online account')))}</form>`; },
 
-    create: () => { const first = !X.profiles.length, legacy = S.readLegacy(); return h`<form id="auf" data-submit="auth:create" novalidate>
-      <h1>${first ? t('Create your profile') : t('Add a profile')}</h1>
-      <p class="sub">${first ? t('Your profile has its own password. Everything is encrypted in this browser.') : t('A new profile starts empty and has its own password.')}</p>
+    create: () => { const first = !X.profiles.length, legacy = S.readLegacy(), inv = X.hosted && X.hostInfo.inviteRequired; return h`<form id="auf" data-submit="auth:create" novalidate>
+      <h1>${X.hosted ? t('Create your account') : first ? t('Create your profile') : t('Add a profile')}</h1>
+      <p class="sub">${X.hosted ? t('One username and password for every device. Your data is encrypted on your device before it is saved online.') : t('Your profile has its own password. Everything is encrypted in this browser.')}</p>
+      ${offlineNote()}
       ${legacy ? h`<div class="notice ok">${UI.icon('check', 15)}<label class="check"><input type="checkbox" name="adopt" checked><span>${t('Keep the data already on this device in this profile ({n}).', { n: U.plural(legacy.transactions.length, 'transaction') })}</span></label></div>` : ''}
-      <div class="row2"><div class="field"><label for="au-name">${t('Your name')}</label><input id="au-name" name="name" autocomplete="name" ${legacy && legacy.settings.name ? h`value="${legacy.settings.name}"` : ''}></div>
-        <div class="field"><label for="au-user">${t('Username')}</label><input id="au-user" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required></div></div>
+      ${userField('', true)}
       <div class="field"><label for="au-pass">${t('Password')}</label><div class="pw"><input type="password" id="au-pass" name="password" autocomplete="new-password" data-input="auth:strength" required>
         <button type="button" class="btn icon ghost sm" data-act="auth:peek" data-for="au-pass" aria-label="${t('Show or hide the password')}">${UI.icon('eye', 16)}</button></div>
         <div class="strength" id="au-str" data-s="0"><i></i><i></i><i></i><i></i><span>${t('At least 8 characters')}</span></div></div>
       <div class="field"><label for="au-pass2">${t('Confirm password')}</label>${pw('au-pass2', 'password2', 'new-password')}</div>
-      <p class="muted small">${t('Nobody can read your data without the password, not even us. You will get a recovery key on the next screen.')}</p>${err()}
+      ${inv ? h`<div class="field"><label for="au-inv">${t('Invite code')}</label><input id="au-inv" name="invite" autocomplete="off" autocapitalize="off" required></div>` : ''}
+      ${err()}
       ${stay()}
-      <button class="btn primary wide" type="submit">${t('Create profile')}</button>
-      ${links(X.profiles.length ? link('auth:back', t('Back')) : '', link('auth:server', t('Sign in from another device')))}</form>`; },
+      <button class="btn primary wide" type="submit">${X.hosted ? t('Create account') : t('Create profile')}</button>
+      ${links(X.profiles.length || X.hosted ? link('auth:back', t('I already have an account')) : '', !X.hosted ? link('auth:server', t('Use an online account')) : '')}</form>`; },
 
     key: () => h`<div class="keyscreen">${UI.icon('key', 28)}<h1>${t('Save your recovery key')}</h1>
       <p class="sub">${t('If you forget your password, this key is the only way back into your data. Write it down or save it somewhere safe. It is shown only once.')}</p>
@@ -242,40 +294,46 @@ const Auth = (() => {
       <label class="check"><input type="checkbox" id="au-saved" data-change="auth:saved"><span>${t('I have saved my recovery key')}</span></label>
       <button type="button" class="btn primary wide" id="au-continue" data-act="auth:continue" disabled>${t('Continue')}</button></div>`,
 
-    forgot: () => { const p = ui.ctx.p; return h`<form id="auf" data-submit="auth:reset" novalidate>${avatar(p, 60)}<h1>${t('Reset your password')}</h1>
-      <p class="sub">${t('Enter the recovery key you saved when you created {user}, then choose a new password.', { user: X.iso('@' + p.username) })}</p>
+    forgot: () => h`<form id="auf" data-submit="auth:reset" novalidate>${UI.icon('key', 28)}<h1>${t('Reset your password')}</h1>
+      <p class="sub">${t('Enter your username and the recovery key you saved when you created the account, then choose a new password.')}</p>
+      ${userField(ui.ctx.username || lastUser(), false)}
       <div class="field"><label for="au-rec">${t('Recovery key')}</label><input id="au-rec" name="recovery" class="num" dir="ltr" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-IJKL-MNPQ-RSTV-WX" autofocus required></div>
       <div class="field"><label for="au-pass">${t('New password')}</label>${pw('au-pass', 'password', 'new-password')}</div>
       <div class="field"><label for="au-pass2">${t('Confirm password')}</label>${pw('au-pass2', 'password2', 'new-password')}</div>${err()}
-      <button class="btn primary wide" type="submit">${t('Reset password')}</button>${links(link('auth:select', t('Back'), `data-id="${p.id}"`))}</form>`; },
+      <button class="btn primary wide" type="submit">${t('Reset password')}</button>${links(link('auth:back', t('Back')))}</form>`,
 
-    server: () => { const f = !!ui.ctx.forgot; return h`<form id="auf" data-submit="auth:server-go" novalidate>${UI.icon('cloud', 28)}<h1>${t('Sign in from another device')}</h1>
-      <p class="sub">${f ? t('Use your recovery key to set a new password for your account on the server.') : t('Use the account you set up on a Ledgerly server. Your data is downloaded here and decrypted with your password.')}</p>
-      <div class="field"><label for="au-srv">${t('Server address')}</label><input id="au-srv" name="server" dir="ltr" value="${ui.ctx.server || defaultServer()}" placeholder="https://ledgerly.example.com" autocapitalize="off" spellcheck="false" required></div>
-      <div class="field"><label for="au-user">${t('Username')}</label><input id="au-user" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
+    server: () => { const f = !!ui.ctx.forgot; return h`<form id="auf" data-submit="auth:server-go" novalidate>${UI.icon('cloud', 28)}<h1>${t('Use an online account')}</h1>
+      <p class="sub">${f ? t('Use your recovery key to set a new password for your account on the server.') : t('Sign in to the account you use on your Ledgerly website. Your data is downloaded here and decrypted with your password.')}</p>
+      <div class="field"><label for="au-srv">${t('Website address')}</label><input id="au-srv" name="server" dir="ltr" value="${ui.ctx.server || defaultServer()}" placeholder="https://ledgerly.example.com" autocapitalize="off" spellcheck="false" required></div>
+      ${userField('', false)}
       ${f ? h`<div class="field"><label for="au-rec">${t('Recovery key')}</label><input id="au-rec" name="recovery" class="num" dir="ltr" autocomplete="off" spellcheck="false" placeholder="ABCD-EFGH-IJKL-MNPQ-RSTV-WX" required></div>
         <div class="field"><label for="au-pass">${t('New password')}</label>${pw('au-pass', 'password', 'new-password')}</div>`
         : h`<div class="field"><label for="au-pass">${t('Password')}</label>${pw('au-pass', 'password', 'current-password')}</div>`}${err()}
       ${stay()}
       <button class="btn primary wide" type="submit">${UI.icon('cloud', 16)}<span>${f ? t('Reset and sign in') : t('Sign in')}</span></button>
-      ${links(link('auth:server-toggle', f ? t('Use my password instead') : t('Forgot password?')), X.profiles.length ? link('auth:back', t('Back')) : '')}</form>`; },
+      ${links(link('auth:server-toggle', f ? t('Use my password instead') : t('Forgot password?')), link('auth:back', t('Back')))}</form>`; },
   };
 
   function draw() {
     const el = mount(), keep = {};
     for (const f of U.$$('#auth input[name]')) if (f.type !== 'checkbox') keep[f.name] = f.value; else keep['#' + f.name] = f.checked;
     el.hidden = false; document.body.classList.add('locked');
+    const web = /^https?:$/.test(location.protocol);
     el.innerHTML = String(h`<div class="auth-scroll"><div class="auth-card"><div class="auth-brand">${UI.logo(44)}<b>Ledgerly</b></div>${views[ui.view]()}</div>
       <div class="auth-foot"><button type="button" class="btn ghost sm" data-act="auth:lang">${I18N.lang === 'ar' ? 'English' : 'العربية'}</button>
-        <button type="button" class="btn ghost icon sm" data-act="auth:theme" aria-label="${dark() ? t('Switch to light mode') : t('Switch to dark mode')}">${UI.icon(dark() ? 'sun' : 'moon', 16)}</button></div></div>`);
-    for (const f of U.$$('#auth input[name]')) { if (f.type === 'checkbox') { if (('#' + f.name) in keep) f.checked = keep['#' + f.name]; } else if (f.name in keep && f.type !== 'password') f.value = keep[f.name]; }
+        <button type="button" class="btn ghost icon sm" data-act="auth:theme" aria-label="${dark() ? t('Switch to light mode') : t('Switch to dark mode')}">${UI.icon(dark() ? 'sun' : 'moon', 16)}</button>
+        ${web ? h`<button type="button" class="btn ghost sm" data-act="app:qr">${UI.icon('qr', 16)}<span>${t('Open on another device')}</span></button>` : ''}
+        ${Pwa.canInstall() ? h`<button type="button" class="btn ghost sm" data-act="app:install">${UI.icon('download', 16)}<span>${t('Install app')}</span></button>` : ''}</div></div>`);
+    for (const f of U.$$('#auth input[name]')) { if (f.type === 'checkbox') { if (('#' + f.name) in keep) f.checked = keep['#' + f.name]; } else if (f.name in keep && f.type !== 'password' && keep[f.name]) f.value = keep[f.name]; }
     U.$('#app').hidden = true;
     const first = U.$('#auth [autofocus]') || U.$('#auth input:not([type=checkbox]):not([type=hidden])');
-    if (first) setTimeout(() => first.focus({ preventScroll: true }), 30);
+    if (first && matchMedia('(pointer: fine)').matches) setTimeout(() => first.focus({ preventScroll: true }), 30);   // no surprise keyboard on phones
   }
   function show(view, ctx = {}) { ui = { view, ctx, busy: false }; draw(); }
   function hide() { const el = mount(); el.hidden = true; el.innerHTML = ''; document.body.classList.remove('locked'); U.$('#app').hidden = false; }
   X.show = show;
+  X.redraw = () => { if (!X.profile && !mount().hidden) draw(); };
+  X.firstView = firstView;
 
   /** Run an async form action with a busy state and tidy error messages. */
   async function work(form, fn) {
@@ -291,16 +349,13 @@ const Auth = (() => {
     } finally { ui.busy = false; }
   }
   const fails = {};
-  const waitLeft = p => Math.max(0, Math.ceil((((fails[p.id] || {}).until || 0) - Date.now()) / 1000));
+  const waitLeft = k => Math.max(0, Math.ceil((((fails[k] || {}).until || 0) - Date.now()) / 1000));
+  const userOf = form => normUser(form.elements.username.value);
 
-  App.on('auth:select', async el => {
-    const p = byId(el.dataset.id); if (!p) return;
-    if (p.remember) { try { await X.resume(p); return; } catch (e) { X.forget(p); } }   // one tap for a profile kept signed in
-    show('login', { p });
-  });
-  App.on('auth:back', () => show(X.profiles.length ? 'pick' : 'create'));
+  App.on('auth:fill', el => { const f = U.$('#auf'); if (f && f.elements.username) { f.elements.username.value = el.dataset.u; f.elements.password.value = ''; f.elements.password.focus(); } });
+  App.on('auth:back', () => show(firstView()));
   App.on('auth:new', () => show('create'));
-  App.on('auth:forgot', el => show('forgot', { p: byId(el.dataset.id) }));
+  App.on('auth:forgot', () => { const f = U.$('#auf'); show('forgot', { username: f && f.elements.username ? f.elements.username.value : '' }); });
   App.on('auth:server', () => show('server', {}));
   App.on('auth:server-toggle', () => show('server', { forgot: !ui.ctx.forgot, server: (U.$('#au-srv') || {}).value }));
   App.on('auth:peek', el => { const i = U.$('#' + el.dataset.for); i.type = i.type === 'password' ? 'text' : 'password'; i.focus(); });
@@ -319,20 +374,28 @@ const Auth = (() => {
     bar.dataset.s = s; bar.lastElementChild.textContent = [t('At least 8 characters'), t('Weak'), t('Fair'), t('Good'), t('Strong')][s];
   });
 
-  App.onSubmit('auth:login', (form) => work(form, async () => {
-    const p = ui.ctx.p, wait = waitLeft(p);
+  App.onSubmit('auth:signin', form => work(form, async () => {
+    const k = userOf(form).toLowerCase(), wait = waitLeft(k);
     if (wait) throw new UserError(t('Too many tries. Wait {n} seconds.', { n: wait }));
-    try { await X.login(p, form.elements.password.value, !!(form.elements.remember && form.elements.remember.checked)); delete fails[p.id]; }
+    try { await X.signIn(form.elements.username.value, form.elements.password.value, !!(form.elements.remember && form.elements.remember.checked)); delete fails[k]; }
     catch (e) {
-      if (e instanceof UserError && e.message === t('Wrong password.')) { const f = fails[p.id] = fails[p.id] || { n: 0 }; f.n++; if (f.n >= 5) f.until = Date.now() + Math.min(60, Math.pow(2, f.n - 4)) * 1000; }
+      if (e instanceof UserError && [t('Wrong password.'), t('Wrong username or password.')].includes(e.message)) {
+        const f = fails[k] = fails[k] || { n: 0 }; f.n++; if (f.n >= 5) f.until = Date.now() + Math.min(60, Math.pow(2, f.n - 4)) * 1000;
+        throw new UserError(t('Wrong username or password.'));
+      }
       throw e;
     }
   }));
 
   App.onSubmit('auth:create', form => work(form, async () => {
-    const d = form.elements;
+    const d = form.elements, username = userOf(form);
     if (d.password.value !== d.password2.value) throw new UserError(t('The two passwords do not match.'));
-    const r = await X.create({ name: d.name.value, username: d.username.value, password: d.password.value, adopt: d.adopt ? d.adopt.checked : false });
+    if (X.hosted && X.hostInfo.notConfigured) throw new UserError(t('The online service is not set up yet.'));
+    const r = await X.create({ name: username, username, password: d.password.value, adopt: d.adopt ? d.adopt.checked : false });
+    if (X.hosted) {   // the account is created online straight away, so the same login works everywhere
+      try { await Sync.register({ p: r.p, dk: r.dk, auth: r.auth, server: X.hosted, invite: d.invite ? d.invite.value.trim() : '' }); }
+      catch (e) { ls.del(K.KEY_DATA + r.p.id); X.profiles = X.profiles.filter(x => x.id !== r.p.id); saveList(); throw e; }
+    }
     show('key', { ...r, remember: !!(d.remember && d.remember.checked) });
   }));
   App.on('auth:copykey', async el => {
@@ -341,7 +404,7 @@ const Auth = (() => {
   });
   App.on('auth:savekey', () => {
     const p = ui.ctx.p;
-    U.download(`ledgerly-recovery-key-${p.username}.txt`, `Ledgerly recovery key for @${p.username}\r\n\r\n${ui.ctx.text}\r\n\r\nKeep this file private. Anyone with it and your username can reset your password.\r\n`);
+    U.download(`ledgerly-recovery-key-${p.username}.txt`, `Ledgerly recovery key for @${p.username}\r\n${X.hosted ? 'Website: ' + X.hosted + '\r\n' : ''}\r\n${ui.ctx.text}\r\n\r\nKeep this file private. Anyone with it and your username can reset your password.\r\n`);
   });
   App.onChange('auth:saved', el => { U.$('#au-continue').disabled = !el.checked; });
   App.on('auth:continue', async el => {
@@ -352,9 +415,14 @@ const Auth = (() => {
   });
 
   App.onSubmit('auth:reset', form => work(form, async () => {
-    const d = form.elements;
+    const d = form.elements, username = userOf(form);
     if (d.password.value !== d.password2.value) throw new UserError(t('The two passwords do not match.'));
-    await X.recover(ui.ctx.p, d.recovery.value, d.password.value);
+    const p = X.profiles.find(x => x.username.toLowerCase() === username.toLowerCase());
+    if (p) return X.recover(p, d.recovery.value, d.password.value);
+    if (!X.hosted) throw new UserError(t('There is no profile with that username on this device.'));
+    const j = await Sync.join({ server: X.hosted, username, password: d.password.value, recovery: d.recovery.value, exists: () => false });
+    X.profiles.push(j.p); saveList();
+    await enter(j.p, j.dk, j.auth);
   }));
 
   App.onSubmit('auth:server-go', form => work(form, async () => {

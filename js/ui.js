@@ -187,6 +187,24 @@ const UI = (() => {
     h`${blank != null ? h`<option value="">${blank}</option>` : ''}${list.map(([v, l]) => h`<option value="${v}" ${String(v) === String(selected) ? 'selected' : ''}>${l}</option>`)}`;
   UI.accountOptions = (selected, { exclude, blank, all = false } = {}) =>
     UI.options(Q.accounts(all).filter(a => a.id !== exclude || a.id === selected).map(a => [a.id, a.name]), selected, blank);
+  /** A typed category: any name, with the existing ones suggested while typing. New names become new categories on save. */
+  UI.categoryInput = (id, type, selectedId) => {
+    const c = Q.cat(selectedId);
+    return h`<input id="${id}" name="categoryName" list="${id}-list" value="${c ? Q.catName(c) : ''}" maxlength="40" autocomplete="off" autocapitalize="sentences" data-input="cat:typed" data-type="${type}"
+      placeholder="${type === 'income' ? t('Type a category, e.g. Salary') : t('Type a category, e.g. Food')}" data-ph-expense="${t('Type a category, e.g. Food')}" data-ph-income="${t('Type a category, e.g. Salary')}">
+      <datalist id="${id}-list">${UI.categoryDatalist(type)}</datalist><small class="muted cat-new" hidden>${t('New category. It will be added when you save.')}</small>`;
+  };
+  UI.categoryDatalist = type => h`${Q.cats(type).map(c => h`<option value="${Q.catName(c)}"></option>`)}`;
+  /** Switch a typed category field to the other kind of money (income / expense). */
+  UI.setCategoryType = (input, type) => {
+    const prev = input.dataset.type;
+    if (input.value && A.findCategory(prev, input.value) && !A.findCategory(type, input.value)) input.value = '';   // an existing category of the other kind does not carry over
+    input.dataset.type = type; input.placeholder = input.dataset['ph' + (type === 'income' ? 'Income' : 'Expense')];
+    U.$('#' + input.getAttribute('list')).innerHTML = String(UI.categoryDatalist(type));
+    UI.categoryHint(input);
+  };
+  UI.categoryHint = input => { const n = input.parentNode.querySelector('.cat-new'); if (n) n.hidden = !input.value.trim() || !!A.findCategory(input.dataset.type, input.value); };
+  App.onInput('cat:typed', el => UI.categoryHint(el));
   UI.categoryOptions = (type, selected, blank) => UI.options(Q.cats(type).map(c => [c.id, Q.catName(c)]), selected, blank);
   UI.swatches = (name, selected) => h`<div class="swatches" role="radiogroup">${K.PALETTE.map(c => h`<label><input type="radio" name="${name}" value="${c}" ${c === selected ? 'checked' : ''}><i style="--c:${c}"></i></label>`)}</div>`;
 

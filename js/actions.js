@@ -96,6 +96,42 @@ const A = (() => {
     });
     return { id };
   };
+  /** A category the user typed: matched by name (case-insensitive, built-in names in either language), else created. */
+  // "الراتب" and "راتب", "أجرة" and "اجره" are the same word to a person typing quickly
+  const loose = s => clean(s).toLowerCase().replace(/[\u064B-\u065F\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .split(/\s+/).map(w => w.replace(/^(ال)(?=..)/, '')).join(' ');
+  A.findCategory = (type, name) => {
+    const n = clean(name).toLowerCase();
+    if (!n) return null;
+    const list = S.state.categories.filter(c => c.type === type);
+    const exact = list.find(c => c.name.toLowerCase() === n || Q.catName(c).toLowerCase() === n);
+    if (exact) return exact;
+    const l = loose(n);
+    return list.find(c => loose(c.name) === l || loose(Q.catName(c)) === l || (c.sys && loose(I18N.dicts.ar ? I18N.dicts.ar[c.name] || '' : '') === l)) || null;
+  };
+  // a fitting icon for a new category, from words in English or Arabic
+  const ICON_WORDS = [
+    ['home', /rent|house|home|إيجار|ايجار|سكن|بيت|منزل/], ['cart', /grocer|market|food|supermarket|بقال|سوق|مواد|طعام|اكل|أكل/], ['utensils', /restaurant|dining|lunch|dinner|مطعم|غداء|عشاء/],
+    ['car', /car|fuel|petrol|gas|taxi|transport|سيار|بنزين|وقود|تكسي|نقل|مواصلات/], ['zap', /electric|power|water|utilit|كهرباء|ماء|مولد/], ['heart', /health|doctor|medic|pharm|صح|طبيب|دواء|صيدلي|علاج/],
+    ['phone', /phone|internet|mobile|هاتف|انترنت|إنترنت|موبايل|رصيد/], ['book', /school|educat|course|book|مدرس|تعليم|دراس|كتب|جامع/], ['coffee', /coffee|cafe|قهوة|مقهى|كافي/],
+    ['bag', /shop|cloth|مشتريات|ملابس|تسوق/], ['gift', /gift|donat|charity|هدي|تبرع|صدق|زكاة/], ['plane', /travel|trip|flight|سفر|رحل|طيران/], ['film', /movie|fun|game|entertain|ترفيه|العاب|ألعاب|سينما/],
+    ['briefcase', /salary|wage|job|work|راتب|معاش|وظيف|عمل/], ['banknote', /sale|sell|freelance|cash|بيع|مبيعات|ربح|أرباح|ارباح/], ['trending-up', /invest|profit|dividend|استثمار/],
+    ['repeat', /subscri|اشتراك/], ['shield', /insur|تأمين|تامين/],
+  ];
+  const guessIcon = name => { const n = String(name).toLowerCase(); const hit = ICON_WORDS.find(([, re]) => re.test(n)); return hit ? hit[0] : 'tag'; };
+  A.ensureCategory = (type, name, importance) => {
+    if (type !== 'income' && type !== 'expense') return '';
+    const label = clean(name).replace(/\s+/g, ' ').slice(0, 40);
+    if (!label) return '';
+    const found = A.findCategory(type, label);
+    if (found) { if (found.archived) S.commit(st => { st.categories.find(c => c.id === found.id).archived = false; }, { silent: true }); return found.id; }
+    const id = U.uid('c');
+    S.commit(st => {
+      st.categories.push({ id, name: label, type, icon: guessIcon(label), color: K.PALETTE[st.categories.length % K.PALETTE.length],
+        bucket: type === 'expense' ? (+importance >= 3 ? 'needs' : 'wants') : undefined });
+    }, { silent: true });
+    return id;
+  };
   A.deleteCategory = id => {
     let n = 0;
     S.commit(st => {
@@ -250,32 +286,48 @@ const A = (() => {
   };
   A.markBackup = () => S.commit(st => { st.meta.lastBackup = U.today(); }, { silent: true });
 
+  const amountText = (t, signed) => (((signed && t.type === 'expense') ? -1 : 1) * t.amount / U.currency().pow).toFixed(U.currency().digits);
+  /** Transactions as CSV (opens in Excel). Includes week and month columns so a spreadsheet can total by day, week or month. */
   A.exportCsv = (list = Q.sorted()) => {
-    const accs = Q.accMap(), cats = Q.catMap();
-    const rows = [['Date', 'Type', 'Account', 'To account', 'Category', 'Payee', 'Note', 'Purpose', 'Importance (1-4)', 'Tags', 'Amount', 'Cleared']];
+    const accs = Q.accMap(), cats = Q.catMap(), ws = S.state.settings.weekStart;
+    const rows = [['Date', 'Week starting', 'Month', 'Type', 'Account', 'To account', 'Category', 'Payee', 'Purpose', 'Importance (1-4)', 'Note', 'Tags', 'Amount', 'Cleared']];
     for (const t of list) rows.push([
-      t.date, t.type, (accs.get(t.accountId) || {}).name, t.type === 'transfer' ? (accs.get(t.toAccountId) || {}).name : '',
-      (cats.get(t.categoryId) || {}).name || '', t.payee, t.note, t.purpose || '', t.importance || '', (t.tags || []).join(' '),
-      ((t.type === 'expense' ? -1 : 1) * t.amount / U.currency().pow).toFixed(U.currency().digits), t.cleared ? 'yes' : 'no',
+      t.date, U.weekStart(t.date, ws), t.date.slice(0, 7), t.type, (accs.get(t.accountId) || {}).name, t.type === 'transfer' ? (accs.get(t.toAccountId) || {}).name : '',
+      t.type === 'transfer' ? '' : Q.catName(cats.get(t.categoryId)), t.payee, t.purpose || '', t.importance || '', t.note, (t.tags || []).join(' '),
+      amountText(t, true), t.cleared ? 'yes' : 'no',
     ]);
     return U.csv(rows);
   };
+  /** Totals per day, week or month as CSV. */
+  A.exportSummaryCsv = (list, kind) => {
+    const name = { day: 'Day', week: 'Week', month: 'Month' }[kind];
+    const rows = [[name, 'From', 'To', 'Income', 'Expenses', 'Net', 'Transactions']];
+    const fx = c => (c / U.currency().pow).toFixed(U.currency().digits);
+    for (const g of Q.groupBy(list, kind, 'old')) rows.push([kind === 'month' ? g.key : g.from, g.from, g.to, fx(g.income), fx(g.expense), fx(g.net), g.count]);
+    return U.csv(rows);
+  };
 
-  /** Parse a bank CSV into draft rows. opts.dateOrder: 'mdy' | 'dmy' for ambiguous dates. */
+  /** Parse a CSV (a Ledgerly export, a spreadsheet or a bank statement) into draft rows. opts.dateOrder: 'mdy' | 'dmy' for ambiguous dates. */
   A.parseBankCsv = (text, opts = {}) => {
     const grid = U.parseCsv(text);
     if (grid.length < 2) return { error: t('The file has no rows.') };
     const head = grid[0].map(h => clean(h).toLowerCase());
     const find = (...names) => head.findIndex(h => names.some(n => h === n || h.includes(n)));
+    const exact = (...names) => head.findIndex(h => names.includes(h));
     const ix = {
-      date: find('date', 'posted'), amount: find('amount', 'value'), debit: find('debit', 'withdraw'), credit: find('credit', 'deposit'),
-      payee: find('payee', 'description', 'merchant', 'name', 'memo', 'details'), cat: find('category'), type: head.indexOf('type'), note: find('note', 'memo'),
+      date: find('date', 'posted', 'التاريخ', 'تاريخ'), amount: find('amount', 'value', 'المبلغ', 'مبلغ'), debit: find('debit', 'withdraw', 'مدين', 'سحب'), credit: find('credit', 'deposit', 'دائن', 'إيداع', 'ايداع'),
+      payee: find('payee', 'description', 'merchant', 'details', 'الوصف', 'الجهة', 'البيان'), cat: find('category', 'الفئة', 'التصنيف', 'الصنف'),
+      type: exact('type', 'النوع'), note: find('note', 'memo', 'ملاحظة', 'ملاحظات'), purpose: find('purpose', 'الغرض', 'السبب'), imp: find('importance', 'الأهمية', 'الاهمية'),
+      acc: exact('account', 'الحساب', 'from account', 'من حساب'), to: exact('to account', 'إلى حساب', 'الى حساب'), tags: exact('tags', 'الوسوم'), cleared: exact('cleared'),
     };
+    if (ix.payee < 0) ix.payee = find('name', 'الاسم');
     if (ix.date < 0 || (ix.amount < 0 && ix.debit < 0 && ix.credit < 0)) return { error: t('Could not find Date and Amount columns. The first row should contain headers like Date, Description, Amount.') };
     const parseDate = s => {
-      s = clean(s);
+      s = clean(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
       if (U.isDate(s.slice(0, 10)) && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-      const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+      const iso = s.match(/^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})/);
+      if (iso) { const out = `${iso[1]}-${U.pad(+iso[2])}-${U.pad(+iso[3])}`; return U.isDate(out) ? out : null; }
+      const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
       if (!m) return null;
       let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
       let mo = a, d = b;
@@ -283,6 +335,14 @@ const A = (() => {
       const out = `${y}-${U.pad(mo)}-${U.pad(d)}`;
       return U.isDate(out) ? out : null;
     };
+    const typeOf = v => {
+      v = clean(v).toLowerCase();
+      if (/^(inc|in$|دخل|إيراد|ايراد|وارد)/.test(v)) return 'income';
+      if (/^(exp|out$|مصروف|مصاريف|صرف|نفق)/.test(v)) return 'expense';
+      if (/^(tra|تحويل)/.test(v)) return 'transfer';
+      return null;
+    };
+    const cell = (r, i) => (i >= 0 ? clean(r[i]) : '');
     const rows = [], errors = [];
     grid.slice(1).forEach((r, i) => {
       const date = parseDate(r[ix.date]);
@@ -293,27 +353,49 @@ const A = (() => {
         amt = Number.isFinite(cr) && cr ? cr : Number.isFinite(dr) && dr ? -Math.abs(dr) : NaN;
       }
       if (!date || !Number.isFinite(amt) || amt === 0) { errors.push(t('Row {n}: {why}', { n: i + 2, why: !date ? t('unreadable date') : t('unreadable amount') })); return; }
-      let type = amt < 0 ? 'expense' : 'income';
-      if (ix.type >= 0) { const t = clean(r[ix.type]).toLowerCase(); if (t.startsWith('inc')) type = 'income'; else if (t.startsWith('exp')) type = 'expense'; }
-      rows.push({ date, type, amount: Math.abs(amt), payee: clean(r[ix.payee]), note: ix.note >= 0 && ix.note !== ix.payee ? clean(r[ix.note]) : '', categoryName: ix.cat >= 0 ? clean(r[ix.cat]) : '' });
+      const type = typeOf(cell(r, ix.type)) || (amt < 0 ? 'expense' : 'income');
+      const imp = Math.round(+cell(r, ix.imp));
+      rows.push({
+        date, type, amount: Math.abs(amt), payee: cell(r, ix.payee), note: ix.note >= 0 && ix.note !== ix.payee ? cell(r, ix.note) : '',
+        categoryName: type === 'transfer' ? '' : cell(r, ix.cat), purpose: cell(r, ix.purpose), importance: imp >= 1 && imp <= 4 ? imp : undefined,
+        accountName: cell(r, ix.acc), toAccountName: cell(r, ix.to), tags: cell(r, ix.tags), cleared: /^(yes|y|true|1|نعم)$/i.test(cell(r, ix.cleared)),
+      });
     });
-    return { rows, errors };
+    const bad = rows.filter(r => r.type === 'transfer' && !r.toAccountName).length;
+    return { rows: rows.filter(r => r.type !== 'transfer' || r.toAccountName), errors: bad ? [...errors, t('{n} transfers without a “To account” were skipped.', { n: bad })] : errors };
   };
+  /** Add parsed rows. Accounts named in the file are used (and created if new); other rows go to accountId. Categories are matched or created. */
   A.importRows = (rows, accountId) => {
     if (!Q.acc(accountId)) return { error: t('Choose the account these rows belong to.') };
-    const byName = new Map(S.state.categories.map(c => [c.type + ':' + c.name.toLowerCase(), c.id]));
-    const have = new Set(S.state.transactions.filter(t => t.accountId === accountId).map(t => `${t.date}|${t.type}|${t.amount}|${(t.payee || '').toLowerCase()}`));
+    const accByName = new Map(S.state.accounts.map(a => [a.name.toLowerCase(), a.id]));
+    let newAccounts = 0;
+    const accountFor = name => {
+      const n = clean(name);
+      if (!n) return accountId;
+      const hit = accByName.get(n.toLowerCase());
+      if (hit) return hit;
+      const r = A.saveAccount({ name: n, type: /cash|نقد|كاش/i.test(n) ? 'cash' : /sav|توفير|ادخار/i.test(n) ? 'savings' : 'checking', opening: 0 });
+      if (r.error) return accountId;
+      accByName.set(n.toLowerCase(), r.id); newAccounts++;
+      return r.id;
+    };
+    const sigOf = x => `${x.date}|${x.type}|${x.amount}|${x.accountId}|${(x.payee || '').toLowerCase()}`;
+    const have = new Set(S.state.transactions.map(sigOf));
+    const ready = rows.map(r => ({ ...r, accountId: accountFor(r.accountName), toAccountId: r.type === 'transfer' ? accountFor(r.toAccountName) : undefined }));
+    const before = S.state.categories.length;
+    for (const r of ready) if (r.type !== 'transfer' && r.categoryName) r.categoryId = A.ensureCategory(r.type, r.categoryName, r.importance);
     let added = 0, skipped = 0;
     S.commit(st => {
-      for (const r of rows) {
-        const sig = `${r.date}|${r.type}|${r.amount}|${(r.payee || '').toLowerCase()}`;
+      for (const r of ready) {
+        if (r.type === 'transfer' && r.toAccountId === r.accountId) { skipped++; continue; }
+        const sig = sigOf(r);
         if (have.has(sig)) { skipped++; continue; }
         have.add(sig);
-        st.transactions.push(build({ ...r, accountId, categoryId: byName.get(r.type + ':' + (r.categoryName || '').toLowerCase()) }));
+        st.transactions.push(build(r));
         added++;
       }
     });
-    return { added, skipped };
+    return { added, skipped, newAccounts, newCategories: S.state.categories.length - before };
   };
 
   return A;

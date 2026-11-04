@@ -393,6 +393,26 @@ const Q = (() => {
     const [f, to] = Q.periodRange(kind, anchor);
     return kind === 'day' ? U.fmtDate(anchor, 'med') : kind === 'week' ? U.fmtRange(f, to) : kind === 'year' ? anchor.slice(0, 4) : U.fmtMonth(anchor.slice(0, 7));
   };
+  /** Group transactions into days, weeks or months (the three accounting levels), with totals per group.
+      order: 'new' (latest group first), 'old' (earliest first) or 'big' (latest first, largest amounts first inside each group). */
+  Q.groupBy = (list, kind = 'day', order = 'new') => {
+    const keyOf = kind === 'week' ? d => U.weekStart(d, S.state.settings.weekStart) : kind === 'month' ? d => d.slice(0, 7) : d => d;
+    const map = new Map();
+    for (const x of list) {
+      const k = keyOf(x.date);
+      let g = map.get(k);
+      if (!g) { const [from, to] = Q.periodRange(kind, kind === 'month' ? k + '-01' : k); g = { key: k, kind, from, to, label: Q.periodLabel(kind, kind === 'month' ? k + '-01' : k), income: 0, expense: 0, transfers: 0, count: 0, items: [] }; map.set(k, g); }
+      g.items.push(x); g.count++;
+      if (x.type === 'income') g.income += x.amount; else if (x.type === 'expense') g.expense += x.amount; else g.transfers += x.amount;
+    }
+    const groups = [...map.values()].sort((a, b) => (order === 'old' ? (a.key < b.key ? -1 : 1) : (a.key < b.key ? 1 : -1)));
+    for (const g of groups) {
+      g.net = g.income - g.expense;
+      if (order === 'old') g.items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0)));
+      else if (order === 'big') g.items.sort((a, b) => b.amount - a.amount);
+    }
+    return groups;
+  };
   const bar = (from, to, label, title, cur) => ({ from, to, label, title, cur, ...Q.sumDays(from, to) });
   /** Bars for a trend chart that ends at `anchor`: 14 days, 12 weeks, 12 months or 5 years. */
   Q.trend = (kind, anchor = U.today()) => cached(`trend:${kind}:${anchor}`, () => {

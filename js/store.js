@@ -17,7 +17,7 @@ const K = {
   BUCKETS: { needs: 'Needs', wants: 'Wants' },
   IMP_COLORS: { 4: '#256abf', 3: '#3987e5', 2: '#6da7ec', 1: '#9ec5f4' },   // importance: one blue ramp, darker = more important
   CAT_ICONS: ['home', 'cart', 'car', 'zap', 'heart', 'shield', 'phone', 'book', 'utensils', 'film', 'bag', 'repeat', 'plane', 'gift', 'coffee', 'briefcase', 'banknote', 'trending-up', 'landmark', 'tag'],
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
   KEY: 'ledgerly:v1',                 // legacy single-profile data (migrated into a profile, then removed)
   KEY_PROFILES: 'ledgerly:profiles',
   KEY_DATA: 'ledgerly:data:',          // + profile id: that profile's encrypted data

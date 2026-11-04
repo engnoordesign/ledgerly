@@ -39,6 +39,7 @@ const Sync = (() => {
       bad_invite: t('That invite code is not valid.'), server_full: t('This server has reached its account limit.'),
       bad_credentials: t('Wrong username or password.'), too_many_attempts: t('Too many attempts. Try again in a few minutes.'),
       bad_username: t('Usernames are 3 to 32 letters, numbers, dots, dashes or underscores.'), too_large: t('Your data is too large for this server.'),
+      not_configured: t('The online service is not set up yet.'),
     };
     return new UserError(map[code] || t('The server refused the request ({code}).', { code: code || r.status }));
   };
@@ -187,24 +188,30 @@ const Sync = (() => {
   /* ---------- account on a server ---------- */
   Y.probe = async serverRaw => {
     const server = normUrl(serverRaw), r = await http(server, 'GET', '/api/info');
+    if (r.status === 503 && r.body.error) throw serverError(r);
     if (r.status !== 200 || r.body.app !== 'ledgerly-server') throw new UserError(t('That address is not a Ledgerly server.'));
     return { server, ...r.body };
   };
-  /** Start syncing the open profile: create its account on the server (or reconnect to one it already had). */
-  Y.enable = async (serverRaw, username, invite) => {
-    const p = Auth.profile;
-    if (p.sync && p.sync.server) { p.sync.enabled = true; Auth.saveList(); await Y.start(); return; }
+  /** Create the account for profile p on a server (p.recAuthSealed must exist). blob: the profile's sealed data, defaults to what is stored for it. */
+  Y.register = async ({ p, dk, auth, server: serverRaw, username, invite, blob }) => {
     const info = await Y.probe(serverRaw);
     username = Auth.normUser(username || p.username);
     if (!Auth.USER_RE.test(username)) throw new UserError(t('Usernames are 3 to 32 letters, numbers, dots, dashes or underscores.'));
     if (info.signup === 'closed') throw new UserError(t('This server is not accepting new accounts.'));
     if (!p.recAuthSealed) throw new UserError(t('Create a new recovery key first, then turn sync on.'));
-    const recAuth = await Vault.open(Auth.dk, p.recAuthSealed);
-    const r = await http(info.server, 'POST', '/api/register', { username, salt: p.salt, iter: p.iter, auth: Auth.secret, pwWrap: p.pwWrap, recAuth, recWrap: p.recWrap, blob: await seal(), invite: invite || undefined });
-    if (r.status === 409) throw new UserError(t('That username is already taken on this server. If it is your account from another device, use “Sign in from another device” on the lock screen. Otherwise pick another username.'));
+    const recAuth = await Vault.open(dk, p.recAuthSealed);
+    blob = blob || localStorage.getItem(K.KEY_DATA + p.id);
+    const r = await http(info.server, 'POST', '/api/register', { username, salt: p.salt, iter: p.iter, auth, pwWrap: p.pwWrap, recAuth, recWrap: p.recWrap, blob, invite: invite || undefined });
+    if (r.status === 409) throw new UserError(t('That username is already taken. If it is yours, sign in instead. Otherwise pick another username.'));
     if (r.status !== 201) throw serverError(r);
     p.sync = { server: info.server, username, version: r.body.version, lastSyncedAt: Date.now(), dirty: false, enabled: true };
     Auth.saveList(); try { localStorage.setItem('ledgerly:server', info.server); } catch (e) { /* ignore */ }
+  };
+  /** Start syncing the open profile: create its account on the server (or reconnect to one it already had). */
+  Y.enable = async (serverRaw, username, invite) => {
+    const p = Auth.profile;
+    if (p.sync && p.sync.server) { p.sync.enabled = true; Auth.saveList(); await Y.start(); return; }
+    await Y.register({ p, dk: Auth.dk, auth: Auth.secret, server: serverRaw, username, invite, blob: await seal() });
     await Y.start();
   };
   Y.disable = () => { const c = cfg(); if (c) { c.enabled = false; Auth.saveList(); } Y.stop(); };
