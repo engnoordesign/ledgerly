@@ -79,7 +79,17 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
 
   /* ================= server ================= */
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ledgerly-test-'));
-  const mk = async (opts = {}) => { const s = createServer({ dataDir: fs.mkdtempSync(path.join(tmp, 'd-')), minIter: 1000, scryptN: 1024, ...opts }); const a = await s.listen(0, '127.0.0.1'); s.base = `http://127.0.0.1:${a.port}`; return s; };
+  const mkNode = async (opts = {}) => {
+    const s = createServer({ dataDir: fs.mkdtempSync(path.join(tmp, 'd-')), minIter: 1000, scryptN: 1024, ...opts }); const a = await s.listen(0, '127.0.0.1');
+    s.base = `http://127.0.0.1:${a.port}`; s.node = true; s.maxBlob = s.cfg.maxBlob;
+    s.dump = () => fs.readdirSync(path.join(s.cfg.dataDir, 'users')).map(f => fs.readFileSync(path.join(s.cfg.dataDir, 'users', f), 'utf8')).join('');
+    return s;
+  };
+  const { createCloudLocal } = await import('./cloud-local.mjs');
+  const mkCloud = async (opts = {}) => {
+    const s = await createCloudLocal({ file: path.join(fs.mkdtempSync(path.join(tmp, 'c-')), 'store.sqlite'), minIter: 1000, maxBlob: 3 * 1024 * 1024, serveApp: false, ...opts });
+    s.base = `http://127.0.0.1:${(await s.listen(0)).port}`; return s;
+  };
   const call = async (s, method, p, body, token) => {
     const r = await fetch(s.base + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch (e) { /* not json */ }
@@ -87,6 +97,8 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   };
   const raw = (s, p) => new Promise(res => { http.get({ host: '127.0.0.1', port: new URL(s.base).port, path: p }, r => { let d = ''; r.on('data', c => d += c); r.on('end', () => res({ status: r.statusCode, body: d, headers: r.headers })); }); });
 
+  async function serverSuite(label, mk) {
+  console.log('Server API: ' + label);
   const S = await mk();
   const info = await call(S, 'GET', '/api/info');
   ok(info.status === 200 && info.body.app === 'ledgerly-server', 'info endpoint identifies the server');
@@ -108,7 +120,7 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   const kd = await call(S, 'GET', '/api/kdf?username=noor');
   eq([kd.body.salt, kd.body.iter], [noor.salt, noor.iter], 'kdf returns the real settings for a real account');
 
-  const stored = fs.readdirSync(path.join(S.cfg.dataDir, 'users')).map(f => fs.readFileSync(path.join(S.cfg.dataDir, 'users', f), 'utf8')).join('');
+  const stored = S.dump();
   ok(!stored.includes(PLAINTEXT) && !stored.includes('noor password one'), 'the server file contains no plaintext and no password');
   ok(!stored.includes(noor.auth), 'the server stores a hash of the login secret, not the secret');
 
@@ -128,7 +140,7 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   const p2 = await call(S, 'PUT', '/api/data', { baseVersion: 1, blob: blob1 }, T);
   ok(p2.status === 409 && p2.body.version === 2 && p2.body.blob === blob2, 'saving from an old version is a conflict that returns the current data');
   eq((await call(S, 'PUT', '/api/data', { baseVersion: 2, blob: 'not sealed' }, T)).status, 400, 'a PUT with unencrypted data is refused');
-  const bigBlob = 'v1.' + 'A'.repeat(100) + '.' + 'A'.repeat(S.cfg.maxBlob + 10);
+  const bigBlob = 'v1.' + 'A'.repeat(100) + '.' + 'A'.repeat(S.maxBlob + 10);
   const big = await call(S, 'PUT', '/api/data', { baseVersion: 2, blob: bigBlob }, T).catch(() => ({ status: 'closed' }));
   ok(big.status === 400 || big.status === 413 || big.status === 'closed', 'an oversized blob is refused');
 
@@ -181,14 +193,16 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   eq((await call(S, 'DELETE', '/api/account', { auth: reset.auth }, fin.body.token)).status, 200, 'an account can be deleted');
   eq((await call(S, 'POST', '/api/login', { username: 'noor', auth: reset.auth })).status, 401, 'a deleted account cannot sign in');
 
-  // static files: the app only
-  const idx = await raw(S, '/');
-  ok(idx.status === 200 && /<title>Ledgerly/.test(idx.body), 'the server serves the app');
-  ok(/script-src 'self'/.test(idx.headers['content-security-policy'] || ''), 'the app is served with a Content-Security-Policy');
-  eq((await raw(S, '/js/vault.js')).status, 200, 'app scripts are served');
-  for (const bad of ['/server/server.js', '/data/secret.key', '/.git/config', '/tools/auth-test.js', '/package.json', '/js/%2e%2e/server/server.js', '/%2e%2e/%2e%2e/windows/win.ini', '/js/..%5cserver%5cserver.js', '/README.md'])
-    eq((await raw(S, bad)).status, 404, 'not served: ' + bad);
-  ok(!(await raw(S, '/api/data')).body.includes('blob'), 'API paths are never served as files');
+  if (S.node) {
+    // static files: the app only
+    const idx = await raw(S, '/');
+    ok(idx.status === 200 && /<title>Ledgerly/.test(idx.body), 'the server serves the app');
+    ok(/script-src 'self'/.test(idx.headers['content-security-policy'] || ''), 'the app is served with a Content-Security-Policy');
+    eq((await raw(S, '/js/vault.js')).status, 200, 'app scripts are served');
+    for (const bad of ['/server/server.js', '/data/secret.key', '/.git/config', '/tools/auth-test.js', '/package.json', '/js/%2e%2e/server/server.js', '/%2e%2e/%2e%2e/windows/win.ini', '/js/..%5cserver%5cserver.js', '/README.md'])
+      eq((await raw(S, bad)).status, 404, 'not served: ' + bad);
+    ok(!(await raw(S, '/api/data')).body.includes('blob'), 'API paths are never served as files');
+  }
 
   // sign-up policies
   const SI = await mk({ signup: 'invite', invite: 'letmein' });
@@ -204,12 +218,29 @@ Vault.ITER = 1000; // fast for tests; the app uses 600,000
   await call(SM, 'POST', '/api/register', reg());
   eq((await call(SM, 'POST', '/api/register', reg({ username: 'second' }))).status, 403, 'the account limit is enforced');
   await SM.close();
-  await throws(async () => createServer({ dataDir: fs.mkdtempSync(path.join(tmp, 'd-')), signup: 'invite' }), 'invite mode without a code refuses to start');
+  if (S.node) await throws(async () => createServer({ dataDir: fs.mkdtempSync(path.join(tmp, 'd-')), signup: 'invite' }), 'invite mode without a code refuses to start');
+  else { const SX = await mk({ signup: 'invite' }); eq((await call(SX, 'GET', '/api/info')).status, 503, 'invite mode without a code reports that it is not configured'); await SX.close(); }
 
   const opt = await new Promise(res => { const rq = http.request({ host: '127.0.0.1', port: new URL(S.base).port, path: '/api/data', method: 'OPTIONS' }, r => res(r.statusCode)); rq.end(); });
   eq(opt, 204, 'CORS preflight is answered');
 
   await S.close();
+  }
+  await serverSuite('Node server (server/server.js)', mkNode);
+  await serverSuite('Cloudflare Worker API (server/cloud-api.mjs)', mkCloud);
+
+  // the Cloudflare store splits large data into chunks (a SQLite row there holds at most 2 MB)
+  const SB = await mkCloud(), bigAcct = await Vault.createAccount('chunky password');
+  const bigA = 'v1.' + 'A'.repeat(16) + '.' + 'B'.repeat(2500000), bigB = 'v1.' + 'C'.repeat(16) + '.' + 'D'.repeat(1800000) + 'E';
+  const rb = await call(SB, 'POST', '/api/register', { username: 'chunky', salt: bigAcct.salt, iter: bigAcct.iter, auth: bigAcct.auth, pwWrap: bigAcct.pwWrap, recAuth: bigAcct.recAuth, recWrap: bigAcct.recWrap, blob: bigA });
+  eq(rb.status, 201, 'a 2.5 MB account can be created');
+  ok((await call(SB, 'GET', '/api/data', null, rb.body.token)).body.blob === bigA, 'a multi-chunk blob reads back exactly');
+  eq((await call(SB, 'PUT', '/api/data', { baseVersion: 1, blob: bigB }, rb.body.token)).status, 200, 'a multi-chunk blob can be replaced');
+  ok((await call(SB, 'GET', '/api/data', null, rb.body.token)).body.blob === bigB, 'the replacement reads back exactly');
+  ok(!SB.dump().includes('BBBBBBBBBB'), 'chunks of the old version are removed');
+  eq((await call(SB, 'PUT', '/api/data', { baseVersion: 1, blob: bigA }, rb.body.token)).status, 409, 'a stale multi-chunk save is a conflict');
+  ok((await call(SB, 'GET', '/api/data', null, rb.body.token)).body.blob === bigB, 'a refused save leaves no stray chunks behind');
+  await SB.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

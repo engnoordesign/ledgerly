@@ -9,7 +9,7 @@ const files = [];
 const used = new Map();
 const re = /\bt\(\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")/g;
 for (const f of files) {
-  if (f.endsWith('lang-ar.js') || f.endsWith('i18n.js')) continue;
+  if (f.endsWith('lang-ar.js') || f.endsWith('i18n.js') || f.endsWith('qrcode.js')) continue;
   const src = fs.readFileSync(f, 'utf8');
   let m;
   while ((m = re.exec(src))) {

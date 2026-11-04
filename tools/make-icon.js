@@ -20,7 +20,7 @@ const inRoundRect = (x, y, r) => {
   return Math.hypot(x - cx, y - cy) <= r;
 };
 /** Colour of the logo at a point in design space, or null when transparent. */
-const sample = (x, y) => {
+const sampleRound = (x, y) => {
   if (!inRoundRect(x, y, 9)) return null;
   if (nearLine(x, y, G1, 1.2)) return AQUA;
   if (nearLine(x, y, W1, 1.5)) return WHITE;
@@ -28,8 +28,17 @@ const sample = (x, y) => {
   return TOP.map((c, i) => c + (BOT[i] - c) * t);
 };
 
+/** Full-bleed variant for Android "maskable" icons: the background fills the square, the mark sits in the safe zone. */
+const sampleMaskable = (x, y) => {
+  const k = 0.72, ix = (x - 16) / k + 16, iy = (y - 16) / k + 16;
+  if (nearLine(ix, iy, G1, 1.2)) return AQUA;
+  if (nearLine(ix, iy, W1, 1.5)) return WHITE;
+  const t = y / 32;
+  return TOP.map((c, i) => c + (BOT[i] - c) * t);
+};
+
 /** Render the logo to an RGBA buffer with n x n supersampling. */
-const render = size => {
+const render = (size, sample = sampleRound) => {
   const N = 5, buf = Buffer.alloc(size * size * 4);
   for (let py = 0; py < size; py++) for (let px = 0; px < size; px++) {
     let r = 0, g = 0, b = 0, a = 0;
@@ -73,4 +82,9 @@ const out = path.join(__dirname, '..', 'assets');
 fs.mkdirSync(out, { recursive: true });
 fs.writeFileSync(path.join(out, 'ledgerly.ico'), Buffer.concat([head, ...entries, ...images]));
 fs.writeFileSync(path.join(out, 'ledgerly.png'), images[SIZES.length - 1]);
-console.log(`Wrote assets/ledgerly.ico (${SIZES.join(', ')} px) and assets/ledgerly.png`);
+// web app icons (manifest.webmanifest)
+fs.writeFileSync(path.join(out, 'icon-192.png'), png(render(192), 192));
+fs.writeFileSync(path.join(out, 'icon-512.png'), png(render(512), 512));
+fs.writeFileSync(path.join(out, 'icon-maskable-512.png'), png(render(512, sampleMaskable), 512));
+fs.writeFileSync(path.join(out, 'apple-touch-icon.png'), png(render(180, sampleMaskable), 180));   // iOS rounds the corners itself
+console.log(`Wrote assets/ledgerly.ico (${SIZES.join(', ')} px), ledgerly.png and the web app icons`);

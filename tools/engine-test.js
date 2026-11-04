@@ -174,6 +174,94 @@ if (run(`!!I18N.dicts.ar`)) {
   eq(run(`document.documentElement.dir`), 'rtl', 'rtl set');
 }
 
+/* ---- typed categories ---- */
+run(`S.state.settings.lang = 'en'; S.applySettings();`);
+{
+  const n0 = run(`S.state.categories.length`);
+  eq(run(`A.ensureCategory('expense', 'groceries')`), 'c_groceries', 'a typed name matches an existing category, ignoring case');
+  run(`S.state.settings.lang = 'ar'; S.applySettings();`);
+  eq(run(`A.ensureCategory('expense', I18N.t('Groceries'))`), 'c_groceries', 'the Arabic name of a built-in category matches it too');
+  run(`S.state.settings.lang = 'en'; S.applySettings();`);
+  const id = run(`A.ensureCategory('expense', '  Generator   fuel ', 4)`);
+  ok(id && id !== 'c_groceries', 'a new name creates a category');
+  eq(run(`S.state.categories.length`), n0 + 1, 'exactly one category is added');
+  eq(run(`Q.cat('${id}').name`), 'Generator fuel', 'the new name is tidied');
+  eq(run(`Q.cat('${id}').bucket`), 'needs', 'an important new expense category counts as a need');
+  eq(run(`Q.cat('${id}').icon`), 'car', 'a fitting icon is guessed from the name');
+  eq(run(`A.ensureCategory('expense', 'generator FUEL')`), id, 'typing it again reuses it');
+  eq(run(`A.ensureCategory('income', 'Generator fuel')`) !== id, true, 'income and expense categories are separate');
+  eq(run(`Q.cat(A.ensureCategory('expense', 'مولدة كهرباء')).icon`), 'zap', 'Arabic words pick an icon as well');
+  eq(run(`A.ensureCategory('expense', '   ')`), '', 'a blank name means uncategorised');
+  eq(run(`A.ensureCategory('transfer', 'x')`), '', 'transfers have no category');
+}
+
+/* ---- daily / weekly / monthly groups ---- */
+{
+  run(`S.version++`);
+  const r = JSON.parse(run(`(() => { const list = Q.filter({ from: U.addDays(U.today(), -120), to: U.today() });
+    const res = {};
+    for (const k of ['day', 'week', 'month']) {
+      const g = Q.groupBy(list, k, 'new');
+      res[k] = { n: g.length, count: g.reduce((a, x) => a + x.count, 0), inc: g.reduce((a, x) => a + x.income, 0), exp: g.reduce((a, x) => a + x.expense, 0),
+        sortedNew: g.every((x, i) => !i || g[i - 1].key > x.key), inside: g.every(x => x.items.every(t => t.date >= x.from && t.date <= x.to)), netOk: g.every(x => x.net === x.income - x.expense) };
+    }
+    const old = Q.groupBy(list, 'week', 'old'), big = Q.groupBy(list, 'month', 'big');
+    res.oldSorted = old.every((x, i) => !i || old[i - 1].key < x.key) && old.every(x => x.items.every((t, i) => !i || x.items[i - 1].date <= t.date));
+    res.bigSorted = big.every(x => x.items.every((t, i) => !i || x.items[i - 1].amount >= t.amount));
+    res.total = list.length; res.inc = U.sum(list.filter(x => x.type === 'income'), x => x.amount); res.exp = U.sum(list.filter(x => x.type === 'expense'), x => x.amount);
+    res.weekStartsMonday = Q.groupBy(list, 'week').every(x => U.parse(x.from).getDay() === 1);
+    return JSON.stringify(res); })()`));
+  for (const k of ['day', 'week', 'month']) {
+    eq(r[k].count, r.total, `${k} groups hold every transaction once`);
+    ok(r[k].inc === r.inc && r[k].exp === r.exp, `${k} totals add up to the period totals`);
+    ok(r[k].sortedNew && r[k].inside && r[k].netOk, `${k} groups are newest first, hold only their own dates, and net = income - expenses`);
+  }
+  ok(r.day.n > r.week.n && r.week.n > r.month.n, 'there are more days than weeks than months');
+  ok(r.oldSorted, 'oldest first sorts groups and rows ascending');
+  ok(r.bigSorted, 'largest first sorts rows by amount inside each group');
+  ok(r.weekStartsMonday, 'weeks start on the configured week day');
+}
+
+/* ---- CSV export and import round trip ---- */
+{
+  const csv = run(`A.exportCsv(Q.filter({ from: U.addDays(U.today(), -40), to: U.today() }))`);
+  const head = csv.split('\r\n')[0];
+  ok(head.includes('Week starting') && head.includes('Month') && head.includes('Importance (1-4)'), 'the export has week, month and importance columns');
+  const parsed = JSON.parse(run(`JSON.stringify(A.parseBankCsv(${JSON.stringify(csv)}))`));
+  const want = run(`Q.filter({ from: U.addDays(U.today(), -40), to: U.today() }).length`);
+  eq(parsed.rows.length, want, 'every exported row parses back');
+  eq(parsed.errors.length, 0, 'no parse errors on our own export');
+  ok(parsed.rows.some(x => x.type === 'transfer' && x.toAccountName), 'transfers keep their "to" account');
+  ok(parsed.rows.some(x => x.importance && x.purpose !== undefined), 'importance comes back');
+  const again = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(parsed.rows)}, 'a_chk'))`));
+  eq(again.added, 0, 'importing our own export again adds nothing (duplicates skipped)');
+  const ar = 'التاريخ,النوع,الفئة,الوصف,المبلغ,الأهمية\r\n2026-03-05,مصروف,مولدة,اشتراك المولدة,25000,4\r\n05/03/2026,دخل,راتب,راتب آذار,900000,4\r\n2026-03-06,مصروف,نقل جديد,تكسي,-7000,';
+  const pa = JSON.parse(run(`JSON.stringify(A.parseBankCsv(${JSON.stringify(ar)}, { dateOrder: 'dmy' }))`));
+  eq(pa.rows.length, 3, 'Arabic headers are understood');
+  ok(pa.rows[0].type === 'expense' && pa.rows[1].type === 'income' && pa.rows[1].date === '2026-03-05', 'Arabic type words and day/month dates are read');
+  eq(pa.rows[2].amount, 700000, 'the sign is dropped when the type column says expense');
+  run(`S.state.settings.lang = 'ar'; S.applySettings();`);
+  const n0 = run(`S.state.categories.length`);
+  const ia = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(pa.rows)}, 'a_chk'))`));
+  ok(ia.added === 3 && ia.newCategories === 2 && run(`S.state.categories.length`) === n0 + 2, 'importing creates new categories and matches existing ones (راتب is the built-in Salary)');
+  eq(run(`S.state.transactions.find(x => x.purpose === undefined && x.payee === 'راتب آذار').categoryId`), 'c_salary', 'the imported salary row lands in Salary');
+  run(`S.state.settings.lang = 'en'; S.applySettings();`);
+}
+
+/* ---- web app shell: the offline list covers every script the page loads ---- */
+{
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const sw = { self: { addEventListener() {} } }; vm.createContext(sw);
+  vm.runInContext(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'), sw);
+  const shell = new Set(sw.self.SHELL);
+  const used = [...html.matchAll(/<script src="([^"]+)"/g), ...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m => m[1]);
+  const missing = used.filter(u => !shell.has(u));
+  eq(missing.join(','), '', 'sw.js precaches every script and stylesheet in index.html');
+  ok([...shell].every(f => f === './' || fs.existsSync(path.join(root, f))), 'every file in the offline list exists');
+  const mf = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
+  ok(mf.icons.every(i => fs.existsSync(path.join(root, i.src))) && mf.icons.some(i => i.purpose === 'maskable') && mf.display === 'standalone', 'the manifest is installable (icons exist, maskable icon, standalone)');
+}
+
 if (process.argv.includes('--report')) {
   run(`S.state.settings.lang = 'en'; S.applySettings();`);
   console.log(run(`Q.series(U.curMonth(), 12).map(m => m.key + '  income ' + (m.income / 100).toFixed(0).padStart(6) + '  spent ' + (m.expense / 100).toFixed(0).padStart(6) + '  rate ' + (m.income ? ((m.income - m.expense) / m.income * 100).toFixed(0) : '-') + '%  to-savings ' + (m.saved / 100).toFixed(0))`).join('\n'));
