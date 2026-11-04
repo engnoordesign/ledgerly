@@ -802,3 +802,122 @@ form[data-type="income"] .only-expense { display: none; }
   .card, .kpi { box-shadow: none; break-inside: avoid; }
   #view { padding: 0; max-width: none; }
 }
+
+/* ---------- simpler navigation ---------- */
+.side-more summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px; color: var(--side-ink); font-weight: 500; cursor: pointer; }
+.side-more summary::-webkit-details-marker { display: none; }
+.side-more summary:hover { background: var(--side-hover); color: #fff; }
+.side-more[open] summary { color: #fff; }
+.side-more a { padding-inline-start: 22px !important; font-size: 14px; }
+.more-nav button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 6px; border-radius: 14px; background: var(--surface-2); color: var(--ink); font-size: 13px; font-weight: 500; border: 0; }
+.more-nav button:hover { background: var(--surface-3); }
+.desk-only { margin-top: 14px; }
+@media (pointer: coarse) { .desk-only { display: none; } }
+@media (max-width: 1100px) and (min-width: 761px) {
+  .side-more summary { justify-content: center; padding: 11px; } .side-more summary span { display: none; }
+  .side-more a { padding-inline-start: 11px !important; }
+}
+
+/* ---------- three accounting levels: day / week / month ---------- */
+.levels { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.lv-l { display: flex; flex-direction: column; gap: 4px; }
+.lv-l small { font-size: 12px; font-weight: 500; }
+.lv-l select { width: auto; min-width: 170px; }
+.list-head .push { margin-inline-start: auto; }
+.g-tot { margin-inline-start: auto; display: inline-flex; gap: 12px; align-items: baseline; font-size: 13px; }
+.g-tot .pos { font-weight: 500; }
+.neg-soft { color: var(--expense-text); }
+.g-tot b { font-weight: 600; min-width: 7ch; text-align: end; }
+.grp { border-top: 1px solid var(--line); }
+.grp:first-of-type { border-top: 0; }
+.tg-h { list-style: none; display: flex; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer; background: var(--surface); position: sticky; top: 0; z-index: 1; }
+.tg-h::-webkit-details-marker { display: none; }
+.tg-h::before { content: ''; width: 8px; height: 8px; flex: none; border: solid var(--ink-3); border-width: 0 2px 2px 0; transform: rotate(-45deg); transition: transform .15s; margin-inline-end: 2px; }
+[dir="rtl"] .tg-h::before { transform: rotate(135deg); }
+.grp[open] > .tg-h::before { transform: rotate(45deg); }
+.grp[open] > .tg-h { border-bottom: 1px solid var(--line); }
+.tg-h:hover { background: var(--surface-2); }
+.grp-t { display: flex; flex-direction: column; min-width: 0; }
+.grp-t b { font-size: 14px; }
+.grp-t small { font-size: 12px; }
+.levels3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lv { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--ink); }
+.lv:hover { text-decoration: none; border-color: var(--line-strong); background: var(--surface-3); }
+.lv-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.lv-h small { font-size: 12px; text-align: end; }
+.lv-r { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.lv-r b { color: var(--ink); font-weight: 600; }
+.lv-r b.pos { color: var(--income-text); } .lv-r b.neg { color: var(--bad-text); }
+.lv-r.tot { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; font-weight: 500; }
+.dash-more { margin-top: 4px; }
+.dash-more > summary { list-style: none; width: fit-content; margin: 0 auto 12px; color: var(--accent); }
+.dash-more > summary::-webkit-details-marker { display: none; }
+.dash-more > summary .i { transition: transform .15s; }
+.dash-more[open] > summary .i { transform: rotate(90deg); }
+[dir="rtl"] .dash-more[open] > summary .i { transform: scaleX(-1) rotate(90deg); }
+
+/* ---------- typed categories ---------- */
+.cat-new { display: block; margin-top: 4px; color: var(--accent); }
+
+/* ---------- import & export ---------- */
+.io-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.io { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.io > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.io small { line-height: 1.4; }
+.io .segc { margin-top: 6px; width: fit-content; }
+.io-i { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.io .backup { font-size: 12px; }
+.io .backup.warn { color: var(--warn-text, #8a5a00); }
+
+/* ---------- sign-in, QR code, install ---------- */
+body.locked .modal-back { z-index: 90; }
+.known { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-top: 14px; }
+.known .chipbtn { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; }
+.auth-foot { flex-wrap: wrap; justify-content: center; }
+.qr-box { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.qr-box .qr { width: min(240px, 70vw); height: auto; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.qr-url { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.stack-btns.center { justify-content: center; }
+.install-steps { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-direction: column; gap: 8px; }
+.install-steps li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.device-card { display: flex; gap: 14px; align-items: flex-start; }
+.device-card > div:first-child { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
+
+@media (max-width: 760px) {
+  .levels { padding: 10px 12px; gap: 10px; }
+  .lv-l { flex: 1 1 140px; } .lv-l .segc { width: 100%; } .lv-l .segc button { flex: 1; } .lv-l select { width: 100%; min-width: 0; }
+  .lv-l:first-child { flex-basis: 100%; }
+  .levels3 { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .lv { padding: 12px 14px; }
+  .tg-h { padding: 12px 14px; flex-wrap: wrap; }
+  .g-tot { gap: 8px; font-size: 12.5px; }
+  .day-h { flex-wrap: wrap; padding-inline: 14px; }
+  .io { grid-template-columns: auto minmax(0, 1fr); }
+  .io > .btn { grid-column: 1 / -1; }
+  .filters > .btn { flex: 0 0 auto; }
+}
+/* installed app: respect notches and home indicators */
+@media (display-mode: standalone) {
+  .sidebar { padding-top: max(20px, env(safe-area-inset-top, 0px)); }
+}
+.lv-table { display: none; }
+.lv-table th a { color: var(--ink); font-weight: 600; }
+.lv-table tr.tot td, .lv-table tr.tot th { font-weight: 600; border-top: 1px solid var(--line); }
+.lv-table td, .lv-table th { padding: 8px 6px; font-size: 13.5px; }
+.lv-table tbody th { text-align: start; color: var(--ink-2); font-weight: 500; }
+@media (max-width: 760px) { .levels3 { display: none; } .lv-table { display: block; } }
+@media (max-width: 760px) {
+  .page-head .sub { display: none; }
+  .page-head { margin-bottom: 14px; }
+  .hide-sm { display: none !important; }
+  .filters .search { flex: 1 1 0; min-width: 0; }
+  .filters [data-act="tx:morefilters"] { order: 0; }
+}
+
+table.plain .r, table.plain th.r { text-align: end; }
+.dash-more, .dash-more > .grid { min-width: 0; }
+.a-meta > div { min-width: 0; }
+.a-meta dd { overflow-wrap: anywhere; white-space: normal; }
+.dash-more > summary { white-space: normal; height: auto; min-height: 38px; max-width: 100%; text-align: center; padding-block: 6px; }
+@media (max-width: 380px) { .lv-table td, .lv-table th { padding: 7px 3px; font-size: 12.5px; } }
+.io .segc { max-width: 100%; overflow-x: auto; }
