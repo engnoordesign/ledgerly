@@ -25,7 +25,7 @@ const bad = (code, msg) => new HttpError(400, code, msg);
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
-const STATIC_OK = /^\/(index\.html|css\/[\w.-]+|js\/[\w.-]+|js\/views\/[\w.-]+|assets\/[\w.-]+)$/;
+const STATIC_OK = /^\/(index\.html|manifest\.webmanifest|sw\.js|css\/[\w.-]+|js\/[\w.-]+|js\/views\/[\w.-]+|assets\/[\w.-]+)$/;
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
   + "img-src 'self' data: blob:; connect-src 'self' http: https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
@@ -271,7 +271,7 @@ function createServer(options = {}) {
     fs.readFile(file, (err, data) => {
       if (err) return send(res, 404, 'text/plain', 'Not found');
       send(res, 200, MIME[path.extname(file)] || 'application/octet-stream', req.method === 'HEAD' ? '' : data,
-        { 'Cache-Control': p.startsWith('/assets/') ? 'public, max-age=86400' : 'no-cache', 'Content-Security-Policy': CSP });
+        { 'Cache-Control': p.startsWith('/assets/') ? 'public, max-age=86400' : 'no-cache', 'Content-Security-Policy': CSP, ...(p === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {}) });
     });
   }
   function send(res, status, type, body, extra = {}) {
