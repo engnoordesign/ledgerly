@@ -1,6 +1,6 @@
 'use strict';
 const DashboardView = (() => {
-  const V = { period: 'month' };
+  const V = { period: 'month', more: (() => { try { return localStorage.getItem('ledgerly:dash-more') === '1'; } catch (e) { return false; } })() };
   const { h, money } = U;
 
   const greeting = () => {
@@ -30,20 +30,19 @@ const DashboardView = (() => {
     const recent = Q.sorted().filter(x => x.date <= U.today()).slice(0, 7);
     const upcoming = Q.upcoming(14).slice(0, 5), goals = S.state.goals.map(g => ({ g, i: Q.goalInfo(g) })).sort((a, b) => a.i.done - b.i.done || b.i.pct - a.i.pct).slice(0, 3);
     const rh = Q.rhythm();
+    const today = U.today(), wk = Q.periodRange('week', today), mo = Q.periodRange('month', today);
+    const lv = [
+      { title: t('Today'), sub: U.fmtDate(today, 'med'), s: Q.sumDays(today, today), group: 'day', range: 'cur' },
+      { title: t('This week'), sub: U.fmtRange(wk[0], wk[1]), s: Q.sumDays(wk[0], wk[1] > today ? today : wk[1]), group: 'week', range: 'l90' },
+      { title: t('This month'), sub: U.fmtMonth(U.curMonth()), s: Q.sumDays(mo[0], mo[1] > today ? today : mo[1]), group: 'month', range: 'ytd' },
+    ];
     const used = tot.plannedExpense ? tot.actualExpense / tot.plannedExpense : 0;
     const hot = br.expense.filter(r => r.planned > 0).sort((a, b) => b.ratio - a.ratio).slice(0, 4);
 
     return h`
       ${UI.pageHead({ title: greeting(), sub: U.fmtDate(U.today(), 'long'), actions: h`${UI.monthNav(mk, 'dash:month')}<button class="btn primary" data-act="tx:new">${UI.icon('plus', 16)}<span>${t('New transaction')}</span></button>` })}
       <div class="grid">
-        <section class="card hero-card s5">
-          <div class="k-top"><span class="k-label">${t('Net worth')}</span>${UI.delta(nw.net, nwPrev, { label: t('vs end of last month') })}</div>
-          <div class="hero-num num">${money(nw.net)}</div>
-          <div class="muted small">${nw.net - nwPrev >= 0 ? t('{amount} up since last month', { amount: money(nw.net - nwPrev) }) : t('{amount} down since last month', { amount: money(nwPrev - nw.net) })}</div>
-          <div class="hero-spark">${C.spark(nws.map(p => p.value))}</div>
-          <div class="hero-split"><div><span class="k-label">${t('Assets')}</span><b class="num">${money(nw.assets)}</b></div><div><span class="k-label">${t('Liabilities')}</span><b class="num">${money(nw.liabilities)}</b></div></div>
-        </section>
-        <div class="kpis s7">
+        <div class="kpis s12">
           ${UI.kpi({ label: t('Income'), value: money(cur.income), delta: UI.delta(cur.income, prev.income, { label: cmpLabel }), sub: isCur ? t('{month} so far', { month: U.fmtMonth(mk, 'month') }) : t('{month} total', { month: U.fmtMonth(mk, 'month') }), tone: 'inc' })}
           ${UI.kpi({ label: t('Expenses'), value: money(cur.expense), delta: UI.delta(cur.expense, prev.expense, { upGood: false, label: cmpLabel }), sub: t('{n} entries', { n: cur.count }), tone: 'exp' })}
           ${UI.kpi({ label: t('Net saved'), value: money(net, { sign: true }), delta: UI.delta(net, prevNet, { label: cmpLabel }), sub: cur.income ? t('{pct} of income', { pct: U.fmtPct(net / cur.income) }) : t('No income yet'), tone: net >= 0 ? 'pos' : 'neg' })}
@@ -51,6 +50,16 @@ const DashboardView = (() => {
             ? UI.kpi({ label: t('Budget left'), value: money(tot.plannedExpense - tot.actualExpense), sub: t('{pct} of budget used', { pct: U.fmtPct(used) }), tone: used > 1 ? 'neg' : '' })
             : UI.kpi({ label: t('Budget left'), value: '—', sub: h`<a href="#/plans">${t('Pick a ready-made plan')}</a>` })}
         </div>
+
+        ${UI.card(t('Today, this week, this month'), h`<div class="levels3">${lv.map(l => h`<a class="lv" href="#/transactions?group=${l.group}&range=${l.range}">
+            <span class="lv-h"><b>${l.title}</b><small class="muted">${l.sub}</small></span>
+            <span class="lv-r"><span>${t('Income')}</span><b class="num pos">${money(l.s.income)}</b></span>
+            <span class="lv-r"><span>${t('Expenses')}</span><b class="num">${money(l.s.expense)}</b></span>
+            <span class="lv-r tot"><span>${t('Net')}</span><b class="num ${l.s.income - l.s.expense < 0 ? 'neg' : 'pos'}">${money(l.s.income - l.s.expense, { sign: true })}</b></span></a>`)}</div>
+          <div class="table-wrap lv-table"><table class="plain"><thead><tr><th></th>${lv.map(l => h`<th class="r"><a href="#/transactions?group=${l.group}&range=${l.range}">${l.title}</a></th>`)}</tr></thead><tbody>
+            <tr><th scope="row">${t('Income')}</th>${lv.map(l => h`<td class="r num pos">${money(l.s.income, { compact: l.s.income >= 1e7 * U.currency().pow })}</td>`)}</tr>
+            <tr><th scope="row">${t('Expenses')}</th>${lv.map(l => h`<td class="r num">${money(l.s.expense, { compact: l.s.expense >= 1e7 * U.currency().pow })}</td>`)}</tr>
+            <tr class="tot"><th scope="row">${t('Net')}</th>${lv.map(l => { const n = l.s.income - l.s.expense; return h`<td class="r num ${n < 0 ? 'neg' : 'pos'}">${money(n, { sign: true, compact: Math.abs(n) >= 1e7 * U.currency().pow })}</td>`; })}</tr></tbody></table></div>`, { cls: 's12' })}
 
         ${UI.card(t('Cash flow'), h`
           <div class="cf-sum"><span><i class="sw inc"></i>${t('Income')} <b class="num">${money(winIncome)}</b></span><span><i class="sw exp"></i>${t('Expenses')} <b class="num">${money(winExpense)}</b></span><span>${t('Net')} <b class="num ${winIncome - winExpense < 0 ? 'neg' : 'pos'}">${money(winIncome - winExpense, { sign: true })}</b></span></div>
@@ -62,6 +71,19 @@ const DashboardView = (() => {
           <ul class="legend-list">${top.map(r => h`<li><a href="#/transactions?cat=${r.id === '_other' ? '' : r.id}&month=${mk}"><i class="sw" style="background:${r.cat.color}"></i><span>${Q.catName(r.cat)}</span><b class="num">${money(r.value)}</b></a></li>`)}</ul>`
           : UI.empty({ icon: 'pie', title: t('No spending yet'), text: t('Expenses you add this month will be broken down here.') }), { cls: 's4', sub: U.fmtMonth(mk) })}
 
+        ${UI.card(t('Recent activity'), h`<div class="tx-list">${recent.map(x => UI.txRow(x, { date: 'rel' }))}</div>`,
+          { cls: 's8', actions: h`<a class="btn ghost sm" href="#/transactions">${t('View all')}</a>` })}
+
+        <details class="dash-more s12" ${V.more ? 'open' : ''} data-toggle-key="dash">
+          <summary class="btn ghost">${UI.icon('chevron-right', 16, 'flip')}<span>${V.more ? t('Show less') : t('More: net worth, budget, insights, goals')}</span></summary>
+          <div class="grid">
+        <section class="card hero-card s4">
+          <div class="k-top"><span class="k-label">${t('Net worth')}</span>${UI.delta(nw.net, nwPrev, { label: t('vs end of last month') })}</div>
+          <div class="hero-num num">${money(nw.net)}</div>
+          <div class="muted small">${nw.net - nwPrev >= 0 ? t('{amount} up since last month', { amount: money(nw.net - nwPrev) }) : t('{amount} down since last month', { amount: money(nwPrev - nw.net) })}</div>
+          <div class="hero-spark">${C.spark(nws.map(p => p.value))}</div>
+          <div class="hero-split"><div><span class="k-label">${t('Assets')}</span><b class="num">${money(nw.assets)}</b></div><div><span class="k-label">${t('Liabilities')}</span><b class="num">${money(nw.liabilities)}</b></div></div>
+        </section>
         ${UI.card(t('Budget'), tot.plannedExpense ? h`
           <div class="bud-top"><b class="num">${money(tot.actualExpense)}</b><span class="muted">${t('of {amount}', { amount: money(tot.plannedExpense) })}</span></div>
           ${C.meter(used)}
@@ -87,18 +109,22 @@ const DashboardView = (() => {
           : UI.empty({ icon: 'target', title: t('No goals yet'), text: t('Save towards something specific and watch it grow.'), action: h`<a class="btn" href="#/goals">${t('Create a goal')}</a>` }),
           { cls: 's4', actions: h`<a class="btn ghost sm" href="#/goals">${t('All')}</a>` })}
 
-        ${UI.card(t('Recent activity'), h`<div class="tx-list">${recent.map(x => UI.txRow(x, { date: 'rel' }))}</div>`,
-          { cls: 's8', actions: h`<a class="btn ghost sm" href="#/transactions">${t('View all')}</a>` })}
-
         ${UI.card(t('Your rhythm'), rh.hasData ? h`
           <div class="table-wrap"><table class="rhythm"><thead><tr><th></th>${[t('Day'), t('Week'), t('Month'), t('Year')].map(l => h`<th>${l}</th>`)}</tr></thead><tbody>
             ${[[t('Income'), rh.income, 'pos'], [t('Expenses'), rh.expense, ''], [t('Net'), rh.net, 'net']].map(([l, o, c]) => h`<tr><th scope="row">${l}</th>${['day', 'week', 'month', 'year'].map(k => h`<td class="num ${c === 'net' ? (o[k] < 0 ? 'neg' : 'pos') : c}">${money(o[k], { compact: true, sign: c === 'net' })}</td>`)}</tr>`)}
           </tbody></table></div>
           <p class="muted small">${rh.reliable ? t('Averages from the last {n}.', { n: U.plural(rh.days, 'day') }) : t('Based on only {n} of data so far.', { n: U.plural(rh.days, 'day') })}</p>` : UI.empty({ icon: 'chart', title: t('Not enough data') }),
           { cls: 's4', actions: h`<a class="btn ghost sm" href="#/stats">${t('Statistics')}</a>` })}
+          </div>
+        </details>
       </div>`;
   };
 
+  document.addEventListener('toggle', e => {
+    if (!e.target.matches || !e.target.matches('details[data-toggle-key="dash"]')) return;
+    V.more = e.target.open; try { localStorage.setItem('ledgerly:dash-more', V.more ? '1' : '0'); } catch (err) { /* ignore */ }
+    const lab = U.$('span', e.target.firstElementChild); if (lab) lab.textContent = V.more ? t('Show less') : t('More: net worth, budget, insights, goals');
+  }, true);
   App.on('dash:period', el => { V.period = el.dataset.v; App.render(); });
   App.on('dash:month', el => {
     const v = +el.dataset.v;

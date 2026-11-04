@@ -66,7 +66,7 @@ const ScheduledView = (() => {
         <div class="row2">
           <div class="field"><label for="sch-acc"><span class="not-transfer">${t('Account')}</span><span class="only-transfer">${t('From account')}</span></label><select id="sch-acc" name="accountId">${UI.accountOptions(x.accountId)}</select></div>
           <div class="field only-transfer"><label for="sch-to">${t('To account')}</label><select id="sch-to" name="toAccountId">${UI.accountOptions(x.toAccountId, { blank: t('Choose account') })}</select></div>
-          <div class="field not-transfer"><label for="sch-cat">${t('Category')}</label><select id="sch-cat" name="categoryId">${UI.categoryOptions(x.type === 'income' ? 'income' : 'expense', x.categoryId, t('Uncategorized'))}</select></div>
+          <div class="field not-transfer"><label for="sch-cat">${t('Category')}</label>${UI.categoryInput('sch-cat', x.type === 'income' ? 'income' : 'expense', x.categoryId)}</div>
         </div>
         <div class="row2 not-transfer">
           <div class="field"><label for="sch-purpose">${t('What is it for?')}</label><input id="sch-purpose" name="purpose" maxlength="200" value="${x.purpose || ''}" autocomplete="off"></div>
@@ -85,10 +85,12 @@ const ScheduledView = (() => {
   App.on('sch:edit', el => form(S.state.recurring.find(r => r.id === el.dataset.id)));
   App.onChange('sch:type', el => {
     const f = el.form; f.dataset.type = el.value;
-    if (el.value !== 'transfer') f.elements.categoryId.innerHTML = String(UI.categoryOptions(el.value === 'income' ? 'income' : 'expense', '', t('Uncategorized')));
+    if (el.value !== 'transfer') UI.setCategoryType(f.elements.categoryName, el.value === 'income' ? 'income' : 'expense');
   });
   App.onSubmit('sch:save', f => {
     const d = UI.read(f);
+    if (d.type !== 'transfer' && d.categoryName && d.name && d.amount > 0) d.categoryId = A.ensureCategory(d.type, d.categoryName, d.importance);
+    else d.categoryId = d.type === 'transfer' ? '' : (A.findCategory(d.type, d.categoryName) || {}).id;
     const res = A.saveRecurring({ id: f.dataset.id, name: d.name, type: d.type, amount: d.amount, accountId: d.accountId, toAccountId: d.toAccountId, categoryId: d.categoryId,
       frequency: d.frequency, startDate: d.startDate, endDate: d.endDate, autoPost: d.autoPost, goalId: d.goalId, purpose: d.purpose, importance: d.importance });
     if (res.error) return UI.formError(f, res.error);

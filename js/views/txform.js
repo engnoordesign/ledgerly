@@ -21,34 +21,34 @@ const TxForm = (() => {
     const catType = x.type === 'income' ? 'income' : 'expense';
     const purposes = [...Q.purposes().values()].sort((a, b) => b.count - a.count).slice(0, 60);
     const ph = { expense: t('e.g. School fees, car repair, birthday gift'), income: t('e.g. March salary, selling my old phone') };
+    const oneAcc = accs.length === 1 && x.accountId === accs[0].id;
     const body = h`<form id="txf" novalidate data-submit="txf" data-type="${x.type}" ${editing ? h`data-id="${x.id}"` : ''}>
       <div class="type-tabs" role="radiogroup" aria-label="${t('Type')}">
         ${[['expense', t('Expense')], ['income', t('Income')], ['transfer', t('Transfer')]].map(([v, l]) => h`<label class="tt ${v}"><input type="radio" name="type" value="${v}" data-change="txf:type" ${v === x.type ? 'checked' : ''}><span>${l}</span></label>`)}
       </div>
       <div class="field big"><label for="txf-amount">${t('Amount')}</label>${UI.amountInput('txf-amount', x.amount, { name: 'amount', autofocus: !editing })}</div>
+      <div class="field not-transfer"><label for="txf-cat">${t('Category')}</label>${UI.categoryInput('txf-cat', catType, x.categoryId)}</div>
+      <div class="field not-transfer"><label id="txf-imp-l">${t('Importance')}</label>
+        <div class="imp-pick" id="txf-imp" role="group" aria-labelledby="txf-imp-l">${impChips(catType, x.importance || 0)}</div>
+        <input type="hidden" name="importance" value="${x.importance || 0}"></div>
       <div class="row2">
         <div class="field"><label for="txf-date">${t('Date')}</label>
           <input type="date" id="txf-date" name="date" value="${x.date}" required>
           <div class="quick"><button type="button" class="chipbtn" data-act="txf:date" data-v="0">${t('Today')}</button><button type="button" class="chipbtn" data-act="txf:date" data-v="-1">${t('Yesterday')}</button></div></div>
-        <div class="field"><label for="txf-acc"><span class="not-transfer">${t('Account')}</span><span class="only-transfer">${t('From account')}</span></label>
+        <div class="field${oneAcc ? ' only-transfer' : ''}"><label for="txf-acc"><span class="not-transfer">${t('Account')}</span><span class="only-transfer">${t('From account')}</span></label>
           <select id="txf-acc" name="accountId">${UI.accountOptions(x.accountId, { all: false })}${x.accountId && Q.acc(x.accountId) && Q.acc(x.accountId).archived ? h`<option value="${x.accountId}" selected>${Q.acc(x.accountId).name}</option>` : ''}</select></div>
       </div>
       <div class="field only-transfer"><label for="txf-to">${t('To account')}</label>
         <select id="txf-to" name="toAccountId">${UI.accountOptions(x.toAccountId, { blank: t('Choose account') })}</select></div>
-      <div class="field only-transfer"><label for="txf-goal">${t('Savings goal (optional)')}</label>
-        <select id="txf-goal" name="goalId" data-change="txf:goal">${UI.options(S.state.goals.map(g => [g.id, g.name]), x.goalId, t('No goal'))}</select></div>
-      <div class="field not-transfer"><label for="txf-cat">${t('Category')}</label>
-        <select id="txf-cat" name="categoryId">${UI.categoryOptions(catType, x.categoryId, t('Uncategorized'))}</select></div>
-      <div class="field not-transfer"><label for="txf-purpose"><span class="only-expense">${t('What did you spend it on?')}</span><span class="only-income">${t('What is this income for?')}</span></label>
+      <div class="field not-transfer"><label for="txf-purpose"><span class="only-expense">${t('What did you spend it on?')}</span><span class="only-income">${t('What is this income for?')}</span> <small class="muted">${t('Optional')}</small></label>
         <input id="txf-purpose" name="purpose" maxlength="200" value="${x.purpose || ''}" list="txf-purposes" autocomplete="off" placeholder="${ph[catType]}" data-ph-expense="${ph.expense}" data-ph-income="${ph.income}">
         <datalist id="txf-purposes">${purposes.map(p => h`<option value="${p.text}"></option>`)}</datalist></div>
-      <div class="field not-transfer"><label id="txf-imp-l">${t('Importance')}</label>
-        <div class="imp-pick" id="txf-imp" role="group" aria-labelledby="txf-imp-l">${impChips(catType, x.importance || 0)}</div>
-        <input type="hidden" name="importance" value="${x.importance || 0}"></div>
-      <div class="field"><label for="txf-payee"><span class="not-transfer">${t('Payee or description')}</span><span class="only-transfer">${t('Description')}</span></label>
-        <input id="txf-payee" name="payee" value="${x.payee || ''}" list="txf-payees" autocomplete="off" data-input="txf:payee" placeholder="${t('e.g. Green Basket Market')}">
-        <datalist id="txf-payees">${payees.map(p => h`<option value="${p.name}"></option>`)}</datalist></div>
-      <details class="more"${(x.note || (x.tags || []).length || x.cleared) ? ' open' : ''}><summary>${t('More options')}</summary>
+      <details class="more"${(x.payee || x.note || (x.tags || []).length || x.cleared || x.goalId) ? ' open' : ''}><summary>${t('More details')}</summary>
+        <div class="field"><label for="txf-payee"><span class="not-transfer">${t('Payee or description')}</span><span class="only-transfer">${t('Description')}</span></label>
+          <input id="txf-payee" name="payee" value="${x.payee || ''}" list="txf-payees" autocomplete="off" data-input="txf:payee" placeholder="${t('e.g. Green Basket Market')}">
+          <datalist id="txf-payees">${payees.map(p => h`<option value="${p.name}"></option>`)}</datalist></div>
+        <div class="field only-transfer"><label for="txf-goal">${t('Savings goal (optional)')}</label>
+          <select id="txf-goal" name="goalId" data-change="txf:goal">${UI.options(S.state.goals.map(g => [g.id, g.name]), x.goalId, t('No goal'))}</select></div>
         <div class="field"><label for="txf-note">${t('Note')}</label><input id="txf-note" name="note" value="${x.note || ''}"></div>
         <div class="field"><label for="txf-tags">${t('Tags')}</label><input id="txf-tags" name="tags" value="${(x.tags || []).join(' ')}" placeholder="${t('separate with spaces')}"></div>
         <label class="check"><input type="checkbox" name="cleared" ${x.cleared ? 'checked' : ''}><span>${t('Cleared (matches my bank statement)')}</span></label>
@@ -67,11 +67,11 @@ const TxForm = (() => {
   };
 
   const fillCategories = form => {
-    const type = form.elements.type.value, sel = form.elements.categoryId;
+    const type = form.elements.type.value;
     form.dataset.type = type;
     if (type !== 'transfer') {
       const kind = type === 'income' ? 'income' : 'expense';
-      sel.innerHTML = String(UI.categoryOptions(kind, '', t('Uncategorized')));
+      UI.setCategoryType(form.elements.categoryName, kind);
       U.$('#txf-imp').innerHTML = String(impChips(kind, +form.elements.importance.value || 0));
       const p = form.elements.purpose; p.placeholder = p.dataset['ph' + (kind === 'income' ? 'Income' : 'Expense')];
     }
@@ -88,7 +88,7 @@ const TxForm = (() => {
     if (!p) return;
     const f = el.form;
     if (p.type === f.elements.type.value) {
-      if (f.elements.categoryId && !f.elements.categoryId.value && p.categoryId) f.elements.categoryId.value = p.categoryId;
+      if (f.elements.categoryName && !f.elements.categoryName.value.trim() && Q.cat(p.categoryId)) { f.elements.categoryName.value = Q.catName(Q.cat(p.categoryId)); UI.categoryHint(f.elements.categoryName); }
       if (!f.elements.amount.value.trim()) f.elements.amount.value = U.toInput(p.amount);
       if (p.purpose && f.elements.purpose && !f.elements.purpose.value.trim()) f.elements.purpose.value = p.purpose;
       if (p.importance && f.elements.importance && !+f.elements.importance.value) setImportance(f, p.importance);
@@ -97,9 +97,13 @@ const TxForm = (() => {
 
   App.onSubmit('txf', (form, e) => {
     const d = UI.read(form), again = e.submitter && e.submitter.dataset.again;
-    const data = { type: d.type, amount: d.amount, date: d.date, accountId: d.accountId, toAccountId: d.toAccountId, categoryId: d.categoryId,
+    const data = { type: d.type, amount: d.amount, date: d.date, accountId: d.accountId, toAccountId: d.toAccountId,
       payee: d.payee, note: d.note, tags: d.tags, cleared: d.cleared, goalId: d.goalId, purpose: d.purpose, importance: d.importance };
     const id = form.dataset.id;
+    const invalid = A.validateTx(data);
+    if (invalid) { UI.formError(form, invalid); return; }
+    data.categoryId = A.ensureCategory(d.type, d.categoryName, d.importance);   // typed name: an existing category, or a new one
+    d.categoryId = data.categoryId;
     let res;
     if (id) res = A.updateTx(id, data);
     else if (d.repeat && Number.isFinite(d.amount) && d.amount > 0 && !A.validateTx(data)) {

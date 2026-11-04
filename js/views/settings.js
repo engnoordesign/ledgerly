@@ -41,22 +41,21 @@ const SettingsView = (() => {
           <p class="muted">${S.storageOK ? t('This profile is encrypted in this browser. Backups you download are not encrypted, so keep them private.') : t('This browser is blocking storage, so changes will be lost when you close the page. Export a backup often.')}</p>
           <p class="backup ${backupAge == null || backupAge > 30 ? 'warn' : ''}">${UI.icon(backupAge == null || backupAge > 30 ? 'alert' : 'check', 15)}${meta.lastBackup ? t('Last backup: {date}', { date: U.fmtDate(meta.lastBackup, 'med') }) : t('You have not made a backup yet.')}</p>
           <div class="stack-btns">
-            <button class="btn primary" data-act="data:export">${UI.icon('download', 16)}${t('Download backup')}</button>
-            <button class="btn" data-act="data:import">${UI.icon('upload', 16)}${t('Restore from backup')}</button>
-            <button class="btn" data-act="data:csv">${UI.icon('download', 16)}${t('Export all as CSV')}</button>
-            <input type="file" id="data-file" accept=".json,application/json" hidden data-change="data:file">
-          </div>
-          <hr>
-          <div class="stack-btns">
+            <a class="btn primary" href="#/data">${UI.icon('download', 16)}${t('Import & Export')}</a>
             <button class="btn" data-act="data:demo">${UI.icon('sparkles', 16)}${t('Load sample data')}</button>
             <button class="btn danger ghost" data-act="data:reset">${UI.icon('trash', 16)}${t('Erase everything')}</button>
           </div>`, { cls: 's5' })}
 
+        ${UI.card(t('Use it on every device'), h`<div class="device-card">
+          <div>${UI.icon('qr', 22)}</div>
+          <div><p class="muted">${t('Ledgerly works in the browser of any phone, tablet or computer, and can be installed like an app. Scan the QR code with your phone to open it there.')}</p>
+            <div class="stack-btns"><button class="btn primary" data-act="app:qr">${UI.icon('qr', 16)}${t('Show QR code')}</button>
+              ${Pwa.canInstall() ? h`<button class="btn" data-act="app:install">${UI.icon('download', 16)}${t('Install app')}</button>` : ''}</div></div></div>`, { cls: 's12' })}
+
         ${AccountView.cards()}
 
-        ${UI.card(t('About'), h`<div class="about">${UI.logo(56)}<div><b>Ledgerly</b><span class="muted">${t('Version {v}', { v: K.VERSION })}</span><span class="muted small">${Sync.enabled() ? t('Your data is encrypted before it syncs.') : t('Your data stays on this device.')}</span></div></div>`, { cls: 's12' })}
-
-        ${UI.card(t('Shortcuts'), h`<ul class="kbd-list">
+        ${UI.card(t('About'), h`<div class="about">${UI.logo(56)}<div><b>Ledgerly</b><span class="muted">${t('Version {v}', { v: K.VERSION })}</span><span class="muted small">${Sync.enabled() ? t('Your data is encrypted before it syncs.') : t('Your data stays on this device.')}</span></div></div>
+          <ul class="kbd-list desk-only">
           <li><kbd>N</kbd><span>${t('New transaction')}</span></li><li><kbd>/</kbd><span>${t('Search transactions')}</span></li>
           <li><kbd>Esc</kbd><span>${t('Close a dialog')}</span></li><li><kbd>Enter</kbd><span>${t('Save a form')}</span></li></ul>`, { cls: 's12' })}
       </div>`;
