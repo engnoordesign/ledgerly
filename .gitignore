@@ -1,7 +1,6 @@
 # Your own exports contain real financial data. Never commit them.
 ledgerly-backup-*.json
-ledgerly-all-*.csv
-ledgerly-transactions-*.csv
+ledgerly-*.csv
 
 # The server's data folder holds every account's encrypted data and the server secret. Never commit it.
 data/
@@ -14,3 +13,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# Cloudflare local state
+.wrangler/
+.dev.vars

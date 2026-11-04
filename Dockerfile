@@ -3,7 +3,7 @@
 # Put it behind HTTPS (a hosting platform or reverse proxy): browsers only enable encryption on HTTPS pages.
 FROM node:22-alpine
 WORKDIR /app
-COPY index.html ./
+COPY index.html manifest.webmanifest sw.js ./
 COPY css ./css
 COPY js ./js
 COPY assets ./assets

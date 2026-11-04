@@ -6,6 +6,30 @@ A private budget and accounting app in English and Arabic (right-to-left). Track
 savings, plan with ready-made budgets worked out from your own numbers, and see daily, weekly,
 monthly and yearly statistics.
 
+## Use it online (Cloudflare Workers)
+
+The repository deploys itself to Cloudflare Workers: every push to `main` runs `npx wrangler deploy` (see `wrangler.jsonc`).
+The app is served as static files, and `/api/*` runs `server/worker.mjs`, which keeps every account in a Durable Object's
+SQLite database. No database to create and no extra setup; it fits the free plan.
+
+* **Sign in** with a username and password on any phone, tablet or computer. *Create an account* makes the account online
+  straight away, so the same login works everywhere. Data is encrypted on the device before it is sent.
+* **Open on another device:** the QR button (top bar, lock screen, *Settings → Use it on every device*) shows a QR code
+  for the site. Scan it with a phone camera.
+* **Install it like an app:** Android and desktop Chrome/Edge offer *Install app*; on iPhone use *Share → Add to Home Screen*.
+  The installed app opens without a connection (profiles already on the device still unlock offline).
+
+Worker settings (*Workers & Pages → budgetnoor → Settings → Variables and secrets*), all optional:
+
+| Name | Meaning |
+| --- | --- |
+| `LEDGERLY_SECRET` (secret) | Long random text that keys the stored login hashes. Set it before the first account and never change it. |
+| `LEDGERLY_SIGNUP` | `open` (default), `invite` or `closed`. Set `closed` once your own accounts exist so strangers cannot sign up. |
+| `LEDGERLY_INVITE` | The code new accounts must type when `LEDGERLY_SIGNUP` is `invite`. |
+| `LEDGERLY_MAX_USERS` | Account limit (default 50). |
+
+Try the Cloudflare version locally with `npx wrangler dev`, or without Wrangler: `node tools/cloud-local.mjs`.
+
 ## Run it
 
 **Windows, first time:** double-click **`run-setup.bat`**. It checks the files, puts a Ledgerly icon on your
@@ -88,8 +112,9 @@ account's encrypted data and the server secret.
 
 | Area | Highlights |
 | --- | --- |
-| Dashboard | Net worth, income, expenses, net saved, budget left; cash flow by Day / Week / Month / Year; spending donut; insights and a financial-health score; upcoming bills; goals; your average day / week / month / year |
-| Transactions | Income, expense and transfer ledger; search; filters; day groups with totals; bulk edit; CSV export; bank-CSV import with preview and duplicate skipping; payee autofill; a free-text purpose ("what is it for?") and a four-level importance on every income and expense, searchable and filterable; repeat as scheduled |
+| Home | Income, expenses, net saved, budget left; today / this week / this month totals; cash flow by Day / Week / Month / Year; spending donut; recent activity. Net worth, insights, health score, upcoming bills, goals and averages are one tap away under *More* |
+| Transactions | Income, expense and transfer ledger grouped **daily, weekly or monthly** with income / expenses / net per group, sorted newest, oldest or largest first; categories are **typed freely** (existing ones are suggested, new names become categories); a four-level importance and a free-text purpose on every income and expense; search; filters; bulk edit; payee autofill; repeat as scheduled |
+| Import & Export | One page for everything: transactions as Excel-friendly CSV (with week and month columns), totals per day / week / month, full JSON backup; import CSV from Ledgerly, Excel or a bank (English or Arabic headers, new categories and accounts created, duplicates skipped) and restore backups |
 | Budget | Zero-based plan ("left to budget" must reach zero), Needs / Wants / Savings split, inline editing, carry-forward plans per month |
 | Plans | Smart plan built from your habits plus 50/30/20, 60/20/20, 60/30/10, 50/20/30, 45/15/40, all converted into amounts from your income, with preview before applying |
 | Statistics | Day, week, month, year or custom range; comparison with the previous period; drill-down chart; income statement; category and source breakdown; spending and income by importance; highlights |
@@ -116,7 +141,10 @@ Ledgerly.bat          opens the app in its own window, no setup needed
 scripts/              setup.ps1, launch.ps1, common.ps1 (the logic behind the two .bat files)
 assets/               ledgerly.ico and ledgerly.png (drawn by tools/make-icon.js)
 index.html            page shell and icon sprite
-server/server.js      the optional server: serves the app and stores each account's encrypted data
+server/server.js      the optional Node server: serves the app and stores each account's encrypted data
+server/worker.mjs     the same API on Cloudflare Workers (Durable Object + SQLite); cloud-api.mjs, sql-adapter.mjs
+wrangler.jsonc        Cloudflare deployment; .assetsignore keeps everything but the app private; _headers sets security headers
+manifest.webmanifest, sw.js   installable web app and offline support
 start-server.bat      starts the server on Windows
 Dockerfile            hosting the server in a container
 css/styles.css        design tokens (light/dark), layout, components, responsive rules
@@ -132,7 +160,8 @@ js/engine.js          read-only accounting selectors (balances, budgets, goals, 
 js/actions.js         validated mutations (return undo data), recurring posting, CSV import
 js/seed.js            default categories and the sample-data year
 js/charts.js, ui.js   charts and shared UI kit
-js/views/*.js         one file per page, plus the transaction dialog
+js/pwa.js, qrcode.js  install prompt, QR code (qrcode-generator by Kazuhiko Arase, MIT)
+js/views/*.js         one file per page, plus the transaction dialog (data.js is Import & Export)
 js/app.js             router, global events, boot
 tools/                engine-test.js, check-i18n.js, serve.js
 ```
@@ -142,7 +171,7 @@ tools/                engine-test.js, check-i18n.js, serve.js
 ```
 node tools/engine-test.js     # money, dates, accounting identities, plans, statistics, Arabic plurals
 node tools/check-i18n.js      # every string the app can show has an Arabic translation
-node tools/auth-test.js       # encryption, recovery, merging and the whole server API (security cases included)
+node tools/auth-test.js       # encryption, recovery, merging and the whole server API on both servers (Node and Cloudflare)
 ```
 
 ## Adding a language

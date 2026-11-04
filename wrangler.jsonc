@@ -1,0 +1,21 @@
+// Cloudflare Workers deployment (Workers Builds runs `npx wrangler deploy` on every push to main).
+// The app is served as static assets from this folder; .assetsignore keeps server code, tools and docs out.
+// /api/* runs server/worker.mjs, which stores accounts in a Durable Object's SQLite database (free plan friendly, no setup).
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "budgetnoor",
+  "main": "server/worker.mjs",
+  "compatibility_date": "2026-11-03",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "STORE", "class_name": "LedgerlyStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LedgerlyStore"] }],
+  // keep LEDGERLY_SIGNUP / LEDGERLY_INVITE set in the dashboard when a new version deploys
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}

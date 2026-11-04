@@ -1,0 +1,27 @@
+# Only the app itself is published as static files. Everything below stays private.
+.git
+.github
+.wrangler
+node_modules
+data
+server
+tools
+scripts
+*.md
+*.bat
+*.ps1
+*.log
+*.tmp
+Dockerfile
+LICENSE
+wrangler.jsonc
+wrangler.toml
+package.json
+package-lock.json
+.assetsignore
+.dockerignore
+.gitattributes
+.gitignore
+.dev.vars
+ledgerly-*.json
+ledgerly-*.csv
