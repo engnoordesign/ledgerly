@@ -24,6 +24,7 @@ const DataView = (() => {
     const inc = U.sum(xs.filter(x => x.type === 'income'), x => x.amount), exp = U.sum(xs.filter(x => x.type === 'expense'), x => x.amount);
     const backupAge = meta.lastBackup ? U.diffDays(meta.lastBackup, U.today()) : null;
     const groups = Q.groupBy(xs, V.level, 'new').slice(0, 6);
+    const [dFrom, dTo] = dates(), stmtFrom = dFrom || (xs.length ? xs[xs.length - 1].date : U.today()), stmtTo = dTo || U.today();   // the statement opens on the period chosen above
     return h`
       ${UI.pageHead({ title: t('Import & Export'), sub: t('Move your data in and out: Excel-friendly CSV files and full backups.') })}
       <div class="grid">
@@ -39,6 +40,8 @@ const DataView = (() => {
             <div class="io"><span class="io-i">${UI.icon('layers', 20)}</span><div><b>${t('Totals by day, week or month (CSV)')}</b><small class="muted">${t('One row per period with income, expenses and net.')}</small>
               ${UI.seg('dx:level', [['day', t('Daily')], ['week', t('Weekly')], ['month', t('Monthly')]], V.level, 'fit')}</div>
               <button class="btn" data-act="dx:summary" ${xs.length ? '' : 'disabled'}>${UI.icon('download', 16)}<span>${t('Download')}</span></button></div>
+            <div class="io"><span class="io-i">${UI.icon('printer', 20)}</span><div><b>${t('Printable statement (PDF)')}</b><small class="muted">${t('A tidy statement of income and expenses for a day, week, month, year or any dates. Print it or save it as a PDF.')}</small></div>
+              <button class="btn" data-act="stmt:open" data-kind="custom" data-from="${stmtFrom}" data-to="${stmtTo}">${UI.icon('printer', 16)}<span>${t('Open')}</span></button></div>
             <div class="io"><span class="io-i">${UI.icon('shield', 20)}</span><div><b>${t('Full backup (JSON)')}</b><small class="muted">${t('Everything: accounts, categories, budgets, goals and settings. Restore it here on any device.')}</small>
               <small class="backup ${backupAge == null || backupAge > 30 ? 'warn' : ''}">${meta.lastBackup ? t('Last backup: {date}', { date: U.fmtDate(meta.lastBackup, 'med') }) : t('You have not made a backup yet.')}</small></div>
               <button class="btn" data-act="data:export">${UI.icon('download', 16)}<span>${t('Download')}</span></button></div>

@@ -921,3 +921,84 @@ table.plain .r, table.plain th.r { text-align: end; }
 .dash-more > summary { white-space: normal; height: auto; min-height: 38px; max-width: 100%; text-align: center; padding-block: 6px; }
 @media (max-width: 380px) { .lv-table td, .lv-table th { padding: 7px 3px; font-size: 12.5px; } }
 .io .segc { max-width: 100%; overflow-x: auto; }
+
+/* ---------- printable statement ---------- */
+#print-root { display: none; }
+.modal.xl { --mw: 1120px; }
+.stmt-wrap { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 22px; align-items: start; padding-top: 6px; }
+.stmt-opts { position: sticky; top: 0; display: flex; flex-direction: column; gap: 16px; }
+.stmt-opts .field { margin-top: 0; }
+.stmt-opts .check { margin-top: 9px; }
+.stmt-opts .check:first-of-type { margin-top: 2px; }
+.stmt-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stmt-kinds button { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); padding: 8px 4px; border-radius: 10px; font-size: 13px; font-weight: 500; }
+.stmt-kinds button:hover { background: var(--surface-2); color: var(--ink); }
+.stmt-kinds button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.stmt-opts .monthnav { display: flex; justify-content: space-between; }
+.stmt-opts .mlabel { flex: 1; min-width: 0; }
+.stmt-stage { background: var(--surface-3); border-radius: 14px; padding: 12px 10px; overflow: hidden; min-width: 0; }
+.stmt-stage .rpt-sheet { margin: 0 auto; box-shadow: 0 6px 22px rgba(8, 12, 20, .22); }
+.stmt-hint { margin-inline-end: auto; align-self: center; }
+@media (max-width: 860px) { .stmt-wrap { grid-template-columns: 1fr; } .stmt-opts { position: static; } .stmt-hint { display: none; } }
+
+/* the sheet itself: always black on white, whatever the app theme is */
+.rpt-sheet { --pw: 210mm; --r-ink: #1b1f27; --r-mute: #5b6472; --r-line: #d8dce3; --r-soft: #f3f5f8; --r-acc: #1f5cae; --r-inc: #0f7a4d; --r-exp: #b3402a;
+  width: var(--pw); padding: 14mm; background: #fff; color: var(--r-ink); font: 400 10pt/1.45 var(--font); text-align: start;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; color-scheme: light; }
+html[lang="ar"] .rpt-sheet { font-size: 10.5pt; line-height: 1.6; }
+.rpt-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 2.5px solid var(--r-acc); }
+.rpt-brand { display: flex; align-items: center; gap: 10px; }
+.rpt-brand b { display: block; font-size: 15pt; font-weight: 700; color: var(--r-acc); line-height: 1.15; }
+.rpt-brand small { color: var(--r-mute); font-size: 8.5pt; }
+.rpt-title { text-align: end; }
+.rpt-title h1 { font-size: 17pt; font-weight: 700; line-height: 1.2; letter-spacing: 0; }
+.rpt-title p { color: var(--r-mute); margin-top: 2px; }
+.rpt-meta { display: grid; grid-template-columns: 1fr 1.3fr 1.55fr 1fr auto; gap: 8px 16px; padding: 10px 0 12px; border-bottom: 1px solid var(--r-line); }
+.rpt-meta > div { min-width: 0; }
+.rpt-meta dt { font-size: 8pt; color: var(--r-mute); }
+.rpt-meta dd { font-weight: 600; font-size: 9.5pt; }
+.rpt-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.rpt-box { border: 1px solid var(--r-line); border-top: 3px solid var(--r-acc); border-radius: 6px; padding: 9px 12px; background: var(--r-soft); }
+.rpt-box.inc { border-top-color: var(--r-inc); }
+.rpt-box.exp { border-top-color: var(--r-exp); }
+.rpt-box small { display: block; color: var(--r-mute); font-size: 8.5pt; }
+.rpt-box b { display: block; font-size: 15pt; font-weight: 700; margin: 1px 0; line-height: 1.3; }
+.rpt-box > span { color: var(--r-mute); font-size: 8.5pt; }
+.rpt-sec { margin-top: 16px; }
+.rpt-sec h2 { font-size: 10.5pt; font-weight: 700; color: var(--r-acc); padding-inline-start: 8px; border-inline-start: 3px solid var(--r-acc); margin-bottom: 6px; line-height: 1.25; break-after: avoid; }
+.rpt-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0 22px; }
+.rpt-t { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+.rpt-t thead { display: table-header-group; }
+.rpt-t tr { break-inside: avoid; }
+.rpt-t th { text-align: start; font-size: 8.5pt; font-weight: 600; color: var(--r-mute); padding: 4px 6px; border-top: 0; border-bottom: 1.5px solid var(--r-ink); white-space: normal; }
+.rpt-t td { padding: 4px 6px; border-top: 0; border-bottom: 1px solid var(--r-line); vertical-align: top; color: var(--r-ink); white-space: normal; }
+.rpt-t .r, .rpt-t th.r { text-align: end; }
+.rpt-t tr.tot td { font-weight: 700; border-top: 1.5px solid var(--r-ink); border-bottom: 0; background: var(--r-soft); }
+.rpt-t .num { white-space: nowrap; }
+.rpt-bal { max-width: 340px; }
+.rpt-bar { display: block; height: 4px; margin-top: 3px; background: var(--r-soft); border-radius: 2px; overflow: hidden; }
+.rpt-bar i { display: block; height: 100%; border-radius: 2px; background: var(--r-acc); }
+.rpt-bar.inc i { background: var(--r-inc); }
+.rpt-bar.exp i { background: var(--r-exp); }
+.rpt-sub { display: block; color: var(--r-mute); font-size: 8.5pt; font-weight: 400; }
+.rpt-tx { table-layout: fixed; }
+.rpt-tx .c-d { width: 12%; } .rpt-tx .c-t { width: 31%; } .rpt-tx .c-c { width: 14%; } .rpt-tx .c-a { width: 19%; } .rpt-tx .c-m { width: 12%; }
+.rpt-tx.tr3 .c-t { width: 27%; } .rpt-tx.tr3 .c-c { width: 13%; } .rpt-tx.tr3 .c-a { width: 17%; } .rpt-tx.tr3 .c-m { width: 10.3%; }
+.rpt-tx td { overflow-wrap: anywhere; }
+.rpt-tx td b { font-weight: 600; }
+.rpt-d { white-space: nowrap; }
+.rpt-nil { color: #98a0ad; }
+.rpt-zero td { color: var(--r-mute); }
+.rpt-none { padding: 8px 0; color: var(--r-mute); }
+.rpt-note { margin-top: 5px; color: var(--r-mute); font-size: 8.5pt; }
+.rpt-keep { break-inside: avoid; }
+.rpt-foot { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--r-line); color: var(--r-mute); font-size: 8.5pt; display: flex; flex-direction: column; gap: 2px; }
+.rpt-sheet .arr { display: inline-block; }
+[dir="rtl"] .rpt-sheet .arr { transform: scaleX(-1); }
+
+@media print {
+  body.printing { background: #fff !important; overflow: visible !important; height: auto !important; }
+  body.printing > *:not(#print-root):not(svg) { display: none !important; }
+  body.printing #print-root { display: block; }
+  #print-root .rpt-sheet { width: auto; padding: 0; box-shadow: none; }
+}

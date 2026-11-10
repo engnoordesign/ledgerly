@@ -114,7 +114,8 @@ account's encrypted data and the server secret.
 | --- | --- |
 | Home | Income, expenses, net saved, budget left; today / this week / this month totals; cash flow by Day / Week / Month / Year; spending donut; recent activity. Net worth, insights, health score, upcoming bills, goals and averages are one tap away under *More* |
 | Transactions | Income, expense and transfer ledger grouped **daily, weekly or monthly** with income / expenses / net per group, sorted newest, oldest or largest first; categories are **typed freely** (existing ones are suggested, new names become categories); a four-level importance and a free-text purpose on every income and expense; search; filters; bulk edit; payee autofill; repeat as scheduled |
-| Import & Export | One page for everything: transactions as Excel-friendly CSV (with week and month columns), totals per day / week / month, full JSON backup; import CSV from Ledgerly, Excel or a bank (English or Arabic headers, new categories and accounts created, duplicates skipped) and restore backups |
+| Print statement (PDF) | A tidy, black-on-white **statement of income and expenses** for a **day, week, month, year or any dates you choose**: totals, opening and closing balance, a day / week / month breakdown, category totals, account balances and every transaction with what it was for. Preview it, pick A4 or Letter, then *Print or save as PDF*. Works in English and Arabic (right-to-left). Open it from **Statistics → Print statement** or from **Import & Export** |
+| Import & Export | One page for everything: transactions as Excel-friendly CSV (with week and month columns), totals per day / week / month, the printable statement, full JSON backup; import CSV from Ledgerly, Excel or a bank (English or Arabic headers, new categories and accounts created, duplicates skipped) and restore backups |
 | Budget | Zero-based plan ("left to budget" must reach zero), Needs / Wants / Savings split, inline editing, carry-forward plans per month |
 | Plans | Smart plan built from your habits plus 50/30/20, 60/20/20, 60/30/10, 50/20/30, 45/15/40, all converted into amounts from your income, with preview before applying |
 | Statistics | Day, week, month, year or custom range; comparison with the previous period; drill-down chart; income statement; category and source breakdown; spending and income by importance; highlights |
@@ -161,7 +162,7 @@ js/actions.js         validated mutations (return undo data), recurring posting,
 js/seed.js            default categories and the sample-data year
 js/charts.js, ui.js   charts and shared UI kit
 js/pwa.js, qrcode.js  install prompt, QR code (qrcode-generator by Kazuhiko Arase, MIT)
-js/views/*.js         one file per page, plus the transaction dialog (data.js is Import & Export)
+js/views/*.js         one file per page, plus the transaction dialog (data.js is Import & Export, statement.js the printable statement)
 js/app.js             router, global events, boot
 tools/                engine-test.js, check-i18n.js, serve.js
 ```

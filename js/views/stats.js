@@ -28,7 +28,8 @@ const StatsView = (() => {
     const hasData = S.state.transactions.length > 0;
     const [from, to] = range();
     const valid = U.isDate(from) && U.isDate(to) && from <= to;
-    const head = UI.pageHead({ title: t('Statistics'), sub: t('Daily, weekly, monthly and yearly figures, calculated from what you enter.') });
+    const head = UI.pageHead({ title: t('Statistics'), sub: t('Daily, weekly, monthly and yearly figures, calculated from what you enter.'),
+      actions: hasData ? h`<button type="button" class="btn" data-act="stmt:open" data-kind="${V.kind}" data-anchor="${V.anchor}" data-from="${V.from}" data-to="${V.to}">${UI.icon('printer', 16)}<span>${t('Print statement')}</span></button>` : '' });
     const controls = h`<div class="stat-controls">${UI.seg('stat:kind', kinds(), V.kind)}
       ${V.kind === 'custom'
         ? h`<div class="range-in"><input type="date" id="st-from" data-change="stat:from" value="${V.from}" aria-label="${t('From')}"><span>→</span><input type="date" id="st-to" data-change="stat:to" value="${V.to}" aria-label="${t('To')}"></div>`
