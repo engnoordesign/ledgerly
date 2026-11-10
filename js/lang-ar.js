@@ -461,4 +461,16 @@ I18N.dicts.ar = {
   "Transfers between your own accounts are not income or expenses and do not change this balance.": "التحويلات بين حساباتك ليست دخلًا ولا مصروفات ولا تغيّر هذا الرصيد.",
   "Weekly statement": "كشف أسبوعي",
   "Yearly statement": "كشف سنوي",
+  /* one account, income and expenses only */
+  "Balance at start → end": "الرصيد في البداية ← النهاية",
+  "Everything: transactions, categories, budgets, scheduled items and settings. Restore it here on any device.": "كل شيء: المعاملات والفئات والميزانيات والبنود المجدولة والإعدادات. استعده هنا على أي جهاز.",
+  "How many months of spending your balance should cover.": "كم شهرًا من الإنفاق يجب أن يغطيه رصيدك.",
+  "Kept after spending": "المتبقي بعد الإنفاق",
+  "More: budget, insights, coming up": "المزيد: الميزانية والرؤى والمستحقات القادمة",
+  "Restored {n}.": "تمت استعادة {n}.",
+  "The money you have right now. Ledgerly counts from here.": "المال الذي تملكه الآن. يبدأ ليدجرلي الحساب منه.",
+  "This deletes all transactions, budgets and scheduled items from this browser. Download a backup first if you might want them back.": "سيحذف هذا كل المعاملات والميزانيات والبنود المجدولة من هذا المتصفح. نزّل نسخة احتياطية أولًا إن كنت قد تريدها لاحقًا.",
+  "Use a file exported from Ledgerly, a spreadsheet saved as CSV, or your bank’s CSV. It needs Date and Amount columns; Type, Category, Purpose and Importance are used when present. Negative amounts become expenses. New categories are added and rows already in your ledger are skipped.": "استخدم ملفًا مصدَّرًا من ليدجرلي، أو جدولًا محفوظًا بصيغة CSV، أو ملف CSV من مصرفك. يلزم عمودا التاريخ والمبلغ، ويُستفاد من أعمدة النوع والفئة والغرض والأهمية إن وُجدت. المبالغ السالبة تصبح مصروفات. تُضاف الفئات الجديدة وتُتخطى الصفوف الموجودة في سجلك.",
+  "Your balance covers {months} months (target {target})": "رصيدك يغطي {months} أشهر (الهدف {target})",
+  "{n} transfers were skipped. Ledgerly only keeps income and expenses.": "تم تخطّي {n} من التحويلات. يحتفظ ليدجرلي بالدخل والمصروفات فقط.",
 };

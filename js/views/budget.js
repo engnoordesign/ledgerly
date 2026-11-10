@@ -65,11 +65,11 @@ const BudgetView = (() => {
           ${group(t('Wants'), wants)}
           <div class="bgroup"><div class="bg-h"><b>${t('Savings')}</b><span class="muted num">${money(tot.plannedSavings)} · ${money(tot.actualSaved)}</span></div>
             <div class="brow ${tot.actualSaved >= tot.plannedSavings && tot.plannedSavings ? 'ok' : ''}">
-              <div class="b-name"><span class="cico" style="--c:${K.PALETTE[2]};--s:30px">${UI.icon('vault', 16)}</span><span>${t('Moved to savings and investments')}</span></div>
+              <div class="b-name"><span class="cico" style="--c:${K.PALETTE[2]};--s:30px">${UI.icon('vault', 16)}</span><span>${t('Kept after spending')}</span></div>
               <div class="b-plan" data-l="${t('Budgeted')}"><div class="amt-input sm"><span class="cur" aria-hidden="true">${U.currency().symbol}</span><input id="bud-savings" data-amt inputmode="decimal" autocomplete="off" data-change="bud:savings" value="${plan.savings ? U.toInput(plan.savings) : ''}" placeholder="0" aria-label="${t('Planned savings')}"></div></div>
               <div class="b-act num" data-l="${t('Saved')}">${money(tot.actualSaved)}</div>
               <div class="b-left num" data-l="${t('Remaining')}">${money(tot.plannedSavings - tot.actualSaved)}</div>
-              <div class="b-bar">${tot.plannedSavings ? C.meter(0.0 + tot.actualSaved / tot.plannedSavings, { color: 'var(--income)' }) : ''}</div>
+              <div class="b-bar">${tot.plannedSavings ? C.meter(Math.max(0, tot.actualSaved / tot.plannedSavings), { color: 'var(--income)' }) : ''}</div>
             </div></div>
           <div class="bgroup"><div class="bg-h"><b>${t('Income')}</b><span class="muted num">${money(tot.plannedIncome)} · ${money(tot.actualIncome)}</span></div>
             ${br.income.map(r => row(r, mk, true))}</div>

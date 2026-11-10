@@ -5,14 +5,6 @@
 const K = {
   // Categorical hues from the validated chart palette + extras (category colour follows the entity, never its rank)
   PALETTE: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948', '#0e8fa3', '#9a6b3f', '#64748b', '#7aa21c'],
-  ACCOUNT_TYPES: {
-    checking: { label: 'Checking', icon: 'landmark' },
-    cash: { label: 'Cash', icon: 'banknote' },
-    savings: { label: 'Savings', icon: 'vault', saving: true },
-    investment: { label: 'Investment', icon: 'trending-up', saving: true },
-    credit: { label: 'Credit card', icon: 'card', liability: true },
-    loan: { label: 'Loan', icon: 'landmark', liability: true },
-  },
   FREQ: { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', quarterly: 'Every 3 months', yearly: 'Yearly' },
   BUCKETS: { needs: 'Needs', wants: 'Wants' },
   IMP_COLORS: { 4: '#256abf', 3: '#3987e5', 2: '#6da7ec', 1: '#9ec5f4' },   // importance: one blue ramp, darker = more important
@@ -43,26 +35,50 @@ const S = (() => {
   S.blank = () => ({
     schema: 1,
     settings: { name: '', lang: langHint || navLang(), currency: 'USD', locale: pickLocale(), theme: 'system', savingsTarget: 20, emergencyMonths: 6, weekStart: (langHint || navLang()) === 'ar' ? 6 : 1 },
-    accounts: [], categories: [], transactions: [], budgets: {}, goals: [], recurring: [],
+    accounts: [], categories: [], transactions: [], budgets: {}, recurring: [],
     meta: { created: Date.now(), lastBackup: null, onboarded: false, demo: false },
   });
 
-  /** Fill in anything an older / hand-edited file might lack, and drop obviously broken rows. */
+  const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const mergeById = (a, b) => { const m = new Map(); for (const x of [...(a || []), ...(b || [])]) if (x && x.id) m.set(x.id, x); return [...m.values()]; };
+
+  /** Fill in anything an older / hand-edited file might lack, and drop obviously broken rows.
+      Ledgerly has ONE account and only income and expenses. Older data with several accounts, transfers or savings goals is folded
+      into that shape (the balance is unchanged, because transfers only ever moved money between a person's own accounts).
+      Whatever is taken out is kept under meta.legacy, so nothing is lost. The result depends only on the data, so two devices agree. */
   S.normalize = raw => {
     const b = S.blank(), o = raw && typeof raw === 'object' ? raw : {};
     const st = {
       schema: 1,
       settings: Object.assign(b.settings, o.settings || {}),
-      accounts: Array.isArray(o.accounts) ? o.accounts : [],
+      accounts: Array.isArray(o.accounts) ? o.accounts.filter(a => a && a.id) : [],
       categories: Array.isArray(o.categories) ? o.categories : [],
       transactions: Array.isArray(o.transactions) ? o.transactions : [],
       budgets: o.budgets && typeof o.budgets === 'object' ? o.budgets : {},
-      goals: Array.isArray(o.goals) ? o.goals : [],
       recurring: Array.isArray(o.recurring) ? o.recurring : [],
       meta: Object.assign(b.meta, o.meta || {}),
     };
     st.transactions = st.transactions.filter(t => t && t.id && U.isDate(t.date) && Number.isFinite(t.amount) && ['income', 'expense', 'transfer'].includes(t.type));
     st.accounts.forEach(a => { a.opening = Number.isFinite(a.opening) ? a.opening : 0; });
+
+    const all = st.accounts.slice().sort(byId), main = all[0] || { id: 'a_main', name: 'Main', opening: 0, color: K.PALETTE[0] };
+    const others = all.slice(1), transfers = st.transactions.filter(t => t.type === 'transfer'), recTransfers = st.recurring.filter(r => r && r.type === 'transfer');
+    const goals = Array.isArray(o.goals) ? o.goals.filter(g => g && g.id) : [];
+    if (others.length || transfers.length || recTransfers.length || goals.length) {
+      const old = (st.meta.legacy && typeof st.meta.legacy === 'object') ? st.meta.legacy : {};
+      st.meta.legacy = {
+        at: old.at || U.today(),
+        accounts: mergeById(old.accounts, others), transfers: mergeById(old.transfers, transfers),
+        recurring: mergeById(old.recurring, recTransfers), goals: mergeById(old.goals, goals),
+      };
+    }
+    main.opening = U.sum(all, a => a.opening);          // every account's starting money is now in the one account
+    delete main.type; delete main.archived;
+    st.accounts = [main];
+    st.transactions = st.transactions.filter(t => t.type !== 'transfer');
+    for (const t of st.transactions) { t.accountId = main.id; delete t.toAccountId; delete t.goalId; }
+    st.recurring = st.recurring.filter(r => r && r.type !== 'transfer');
+    for (const r of st.recurring) { r.accountId = main.id; delete r.toAccountId; delete r.goalId; }
     return st;
   };
 

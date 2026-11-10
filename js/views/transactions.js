@@ -2,7 +2,7 @@
 const TransactionsView = (() => {
   const V = {};
   const { h, money } = U;
-  const fresh = () => ({ q: '', type: '', accountId: '', categoryId: '', importance: '', range: 'cur', from: '', to: '', limit: 100, picked: new Set(),
+  const fresh = () => ({ q: '', type: '', categoryId: '', importance: '', range: 'cur', from: '', to: '', limit: 100, picked: new Set(),
     group: V.f ? V.f.group : 'day', sort: V.f ? V.f.sort : 'new', open: new Set(), more: false });
   V.f = fresh();
 
@@ -26,7 +26,7 @@ const TransactionsView = (() => {
   };
   const results = () => {
     const f = V.f, [from, to] = rangeDates();
-    return Q.filter({ q: f.q, type: f.type, accountId: f.accountId, categoryId: f.categoryId, importance: f.importance, from, to });
+    return Q.filter({ q: f.q, type: f.type, categoryId: f.categoryId, importance: f.importance, from, to });
   };
 
   const resultsHtml = () => {
@@ -40,7 +40,8 @@ const TransactionsView = (() => {
     const groups = Q.groupBy(list, f.group, f.sort), today = U.today();
     const cap = f.group === 'day' ? f.limit : 3000;
     let left = cap;
-    const totals = g => h`<span class="g-tot"><span class="num pos" data-tip="${t('Income')}">+${money(g.income)}</span><span class="num neg-soft" data-tip="${t('Expenses')}">−${money(g.expense)}</span><b class="num ${g.net < 0 ? 'neg' : 'pos'}" data-tip="${t('Net')}">${money(g.net, { sign: true })}</b></span>`;
+    // only what happened: income and expenses when there were some, and the net when there were both
+    const totals = g => h`<span class="g-tot">${g.income ? h`<span class="num pos" data-tip="${t('Income')}">+${money(g.income)}</span>` : ''}${g.expense ? h`<span class="num neg-soft" data-tip="${t('Expenses')}">−${money(g.expense)}</span>` : ''}${g.income && g.expense ? h`<b class="num ${g.net < 0 ? 'neg' : 'pos'}" data-tip="${t('Net')}">${money(g.net, { sign: true })}</b>` : ''}</span>`;
     const rows = g => { const xs = g.items.slice(0, Math.max(0, left)); left -= xs.length; return h`${xs.map(x => UI.txRow(x, { select: true, actions: true, picked: f.picked.has(x.id), date: f.group === 'day' ? '' : 'short' }))}`; };
     const shownCount = Math.min(list.length, cap);
     const body = f.group === 'day'
@@ -66,32 +67,30 @@ const TransactionsView = (() => {
     if (!n) return h``;
     return h`<div class="bulk" role="region" aria-label="${t('Selected transactions')}"><b>${t('{n} selected', { n })}</b>
       <select id="bulk-cat" data-change="tx:bulkcat" aria-label="${t('Change category')}"><option value="">${t('Change category…')}</option><option value="_none">${t('Uncategorized')}</option>${Q.cats().map(c => h`<option value="${c.id}">${Q.catName(c)}</option>`)}</select>
-      <button class="btn sm" data-act="tx:bulkclear">${UI.icon('check', 14)}${t('Mark cleared')}</button>
       <button class="btn sm danger" data-act="tx:bulkdel">${UI.icon('trash', 14)}${t('Delete')}</button>
       <button class="btn sm ghost" data-act="tx:unpick">${t('Clear selection')}</button></div>`;
   };
 
   V.render = () => {
-    const f = V.f, nMore = [f.accountId, f.categoryId, f.importance].filter(Boolean).length;
+    const f = V.f, nMore = [f.categoryId, f.importance].filter(Boolean).length;
     if (nMore) f.more = true;
     return h`
       ${UI.pageHead({ title: t('Transactions'), sub: t('Organise your money by day, week or month.'),
         actions: h`<a class="btn hide-sm" href="#/data">${UI.icon('upload', 16)}<span>${t('Import / Export')}</span></a><button class="btn primary" data-act="tx:new">${UI.icon('plus', 16)}<span>${t('New')}</span></button>` })}
-      <div class="levels">
-        <div class="lv-l"><small class="muted">${t('Group by')}</small>${UI.seg('tx:group', [['day', t('Daily')], ['week', t('Weekly')], ['month', t('Monthly')]], f.group, 'fit')}</div>
-        <div class="lv-l"><small class="muted">${t('Sort')}</small><select id="tx-sort" data-change="tx:sort" aria-label="${t('Sort')}">${UI.options([['new', t('Newest first')], ['old', t('Oldest first')], ['big', t('Largest amounts first')]], f.sort)}</select></div>
-        <div class="lv-l"><small class="muted">${t('Period')}</small><select id="tx-range" data-change="tx:range" aria-label="${t('Date range')}">${UI.options(rangeOptions(), f.range)}</select></div>
-      </div>
       <div class="filters">
         <div class="search">${UI.icon('search', 16)}<input id="tx-q" type="search" data-input="tx:q" value="${f.q}" placeholder="${t('Search payee, note, category, amount…')}" aria-label="${t('Search')}" autocomplete="off"></div>
+        <select id="tx-range" data-change="tx:range" aria-label="${t('Date range')}">${UI.options(rangeOptions(), f.range)}</select>
         <button type="button" class="btn ${nMore ? 'on' : ''}" data-act="tx:morefilters" aria-expanded="${f.more}">${UI.icon('settings', 16)}<span>${nMore ? t('Filters ({n})', { n: nMore }) : t('Filters')}</span></button>
-        ${UI.seg('tx:type', [['', t('All')], ['income', t('Income')], ['expense', t('Expenses')], ['transfer', t('Transfers')]], f.type, 'fit')}
-        ${f.more ? h`<select id="tx-acc" data-change="tx:acc" aria-label="${t('Account')}">${UI.accountOptions(f.accountId, { blank: t('All accounts'), all: true })}</select>
-        <select id="tx-cat" data-change="tx:cat" aria-label="${t('Category')}">${UI.options([...Q.cats('expense', true), ...Q.cats('income', true)].map(c => [c.id, Q.catName(c) + ' · ' + (c.type === 'income' ? t('Income') : t('Expense'))]), f.categoryId, t('All categories'))}</select>
-        <select id="tx-imp" data-change="tx:imp" aria-label="${t('Importance')}">${UI.options([...Q.importance(f.type === 'income' ? 'income' : 'expense').map(i => [i.level, i.label]), ['none', t('Not set')]], f.importance, t('Any importance'))}</select>
-        ${nMore ? h`<button type="button" class="btn ghost sm" data-act="tx:reset">${t('Clear filters')}</button>` : ''}` : ''}
+        ${UI.seg('tx:type', [['', t('All')], ['income', t('Income')], ['expense', t('Expenses')]], f.type, 'fit')}
         ${f.range === 'custom' ? h`<div class="range-in"><input type="date" id="tx-from" data-change="tx:from" value="${f.from}" aria-label="${t('From')}"><span>\u2192</span><input type="date" id="tx-to" data-change="tx:to" value="${f.to}" aria-label="${t('To')}"></div>` : ''}
       </div>
+      ${f.more ? h`<div class="levels">
+        <div class="lv-l"><small class="muted">${t('Group by')}</small>${UI.seg('tx:group', [['day', t('Daily')], ['week', t('Weekly')], ['month', t('Monthly')]], f.group, 'fit')}</div>
+        <div class="lv-l"><small class="muted">${t('Sort')}</small><select id="tx-sort" data-change="tx:sort" aria-label="${t('Sort')}">${UI.options([['new', t('Newest first')], ['old', t('Oldest first')], ['big', t('Largest amounts first')]], f.sort)}</select></div>
+        <div class="lv-l"><small class="muted">${t('Category')}</small><select id="tx-cat" data-change="tx:cat" aria-label="${t('Category')}">${UI.options([...Q.cats('expense', true), ...Q.cats('income', true)].map(c => [c.id, Q.catName(c) + ' · ' + (c.type === 'income' ? t('Income') : t('Expense'))]), f.categoryId, t('All categories'))}</select></div>
+        <div class="lv-l"><small class="muted">${t('Importance')}</small><select id="tx-imp" data-change="tx:imp" aria-label="${t('Importance')}">${UI.options([...Q.importance(f.type === 'income' ? 'income' : 'expense').map(i => [i.level, i.label]), ['none', t('Not set')]], f.importance, t('Any importance'))}</select></div>
+        ${nMore ? h`<button type="button" class="btn ghost sm" data-act="tx:reset">${t('Clear filters')}</button>` : ''}
+      </div>` : ''}
       <div id="tx-bulk">${bulkHtml()}</div>
       <div id="tx-results">${resultsHtml()}</div>`;
   };
@@ -107,7 +106,6 @@ const TransactionsView = (() => {
     if (!params || ![...params.keys()].length) return;
     V.f = fresh();
     if (params.get('cat')) V.f.categoryId = params.get('cat');
-    if (params.get('acc')) V.f.accountId = params.get('acc');
     if (params.get('month')) V.f.range = 'm:' + params.get('month');
     if (params.get('type')) V.f.type = params.get('type');
     if (params.get('imp')) V.f.importance = params.get('imp');
@@ -136,7 +134,6 @@ const TransactionsView = (() => {
     if (!V.f.open.size) V.f.open.add('_none');
   }, true);
   App.onChange('tx:range', el => apply(f => { f.range = el.value; }));
-  App.onChange('tx:acc', el => apply(f => { f.accountId = el.value; }));
   App.onChange('tx:cat', el => apply(f => { f.categoryId = el.value; }));
   App.onChange('tx:imp', el => apply(f => { f.importance = el.value; }));
   App.onChange('tx:from', el => apply(f => { f.from = el.value; }));
@@ -151,7 +148,6 @@ const TransactionsView = (() => {
   });
   App.on('tx:unpick', () => { V.f.picked.clear(); refresh(); });
   App.on('tx:bulkdel', () => { const ids = [...V.f.picked]; V.f.picked.clear(); TxForm.del(ids); });
-  App.on('tx:bulkclear', () => { A.setCleared([...V.f.picked], true); V.f.picked.clear(); UI.toast(t('Marked as cleared')); });
   App.onChange('tx:bulkcat', el => {
     if (!el.value) return;
     A.recategorize([...V.f.picked], el.value === '_none' ? '' : el.value);
@@ -167,16 +163,11 @@ const TransactionsView = (() => {
 
   /* ---------- bank CSV import ---------- */
   App.on('tx:import', () => {
-    const accs = Q.accounts();
-    if (!accs.length) return UI.toast(t('Add an account first.'), { kind: 'warn' });
     const ctl = UI.modal({
       title: t('Import transactions from a CSV file'), size: 'lg',
       body: h`<form id="impf" novalidate>
-        <p class="muted">${t('Use a file exported from Ledgerly, a spreadsheet saved as CSV, or your bank’s CSV. It needs Date and Amount columns; Type, Account, Category, Purpose and Importance are used when present. Negative amounts become expenses. New categories are added and rows already in your ledger are skipped.')}</p>
-        <div class="row2">
-          <div class="field"><label for="imp-file">${t('CSV file')}</label><input type="file" id="imp-file" accept=".csv,text/csv,text/plain" data-change="imp:file"></div>
-          <div class="field"><label for="imp-acc">${t('Account for rows that do not name one')}</label><select id="imp-acc" name="accountId">${UI.accountOptions(accs[0].id)}</select></div>
-        </div>
+        <p class="muted">${t('Use a file exported from Ledgerly, a spreadsheet saved as CSV, or your bank’s CSV. It needs Date and Amount columns; Type, Category, Purpose and Importance are used when present. Negative amounts become expenses. New categories are added and rows already in your ledger are skipped.')}</p>
+        <div class="field"><label for="imp-file">${t('CSV file')}</label><input type="file" id="imp-file" accept=".csv,text/csv,text/plain" data-change="imp:file"></div>
         <div class="field"><label for="imp-order">${t('Dates like 03/04/2026 mean')}</label><select id="imp-order" name="order" data-change="imp:file">${UI.options([['mdy', t('Month / Day / Year')], ['dmy', t('Day / Month / Year')]], 'mdy')}</select></div>
         <div id="imp-preview"></div><div class="form-error" hidden></div></form>`,
       footer: h`<button type="button" class="btn" data-close>${t('Cancel')}</button><button type="button" class="btn primary" id="imp-go" data-act="imp:go" disabled>${t('Import')}</button>`,
@@ -192,15 +183,14 @@ const TransactionsView = (() => {
     const sample = res.rows.slice(0, 6);
     box.innerHTML = String(h`<div class="notice ok">${t('{n} ready to import.', { n: U.plural(res.rows.length, 'row') })}${res.errors.length ? ' ' + t('{n} skipped.', { n: U.plural(res.errors.length, 'row') }) : ''}</div>
       <div class="table-wrap"><table class="plain"><thead><tr><th>${t('Date')}</th><th>${t('Type')}</th><th>${t('Category')}</th><th>${t('Description')}</th><th class="r">${t('Amount')}</th></tr></thead><tbody>
-      ${sample.map(r => h`<tr><td>${U.fmtDate(r.date, 'med')}</td><td>${{ income: t('Income'), expense: t('Expense'), transfer: t('Transfer') }[r.type]}</td><td>${r.categoryName || '\u2014'}</td><td>${r.payee || r.purpose || '\u2014'}</td><td class="r num ${r.type === 'income' ? 'pos' : ''}">${money(r.type === 'expense' ? -r.amount : r.amount)}</td></tr>`)}</tbody></table></div>
+      ${sample.map(r => h`<tr><td>${U.fmtDate(r.date, 'med')}</td><td>${{ income: t('Income'), expense: t('Expense') }[r.type]}</td><td>${r.categoryName || '\u2014'}</td><td>${r.payee || r.purpose || '\u2014'}</td><td class="r num ${r.type === 'income' ? 'pos' : ''}">${money(r.type === 'expense' ? -r.amount : r.amount)}</td></tr>`)}</tbody></table></div>
       ${res.errors.length ? h`<details class="more"><summary>${t('Skipped rows')}</summary><ul class="small muted">${res.errors.slice(0, 20).map(e => h`<li>${e}</li>`)}</ul></details>` : ''}`);
   });
   App.on('imp:go', () => {
-    const acc = U.$('#imp-acc').value, res = A.importRows(V.imp.rows, acc);
-    if (res.error) return UI.formError(U.$('#impf'), res.error);
+    const res = A.importRows(V.imp.rows);
     V.imp.ctl.close();
     UI.toast(t('Imported {n}. {m} duplicates skipped.', { n: U.plural(res.added, 'transaction'), m: res.skipped })
-      + (res.newCategories ? ' ' + t('{n} new categories.', { n: res.newCategories }) : '') + (res.newAccounts ? ' ' + t('{n} new accounts.', { n: res.newAccounts }) : ''), { ms: 9000 });
+      + (res.newCategories ? ' ' + t('{n} new categories.', { n: res.newCategories }) : ''), { ms: 9000 });
   });
 
   App.views.transactions = V;

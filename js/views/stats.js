@@ -54,7 +54,7 @@ const StatsView = (() => {
     const topDay = [...U.groupBy(spends, x => x.date)].map(([d, xs]) => ({ d, v: U.sum(xs, x => x.amount) })).sort((a, b) => b.v - a.v)[0];
     const payees = [...U.groupBy(spends.filter(x => x.payee), x => x.payee.toLowerCase())].map(([, xs]) => ({ name: xs[0].payee, v: U.sum(xs, x => x.amount), n: xs.length })).sort((a, b) => b.v - a.v).slice(0, 5);
     const topExp = Q.topCats(cur.exp, 8), topInc = Q.topCats(cur.inc, 6);
-    const nwStart = U.sum([...Q.balances(U.addDays(from, -1)).values()]), nwEnd = U.sum([...Q.balances(last).values()]);
+    const nwStart = Q.balance(U.addDays(from, -1)), nwEnd = Q.balance(last);
     const expLines = lines(cur.exp, prev.exp, 'expense'), incLines = lines(cur.inc, prev.inc, 'income');
     const rate = cur.income ? net / cur.income : null;
     const impRows = (map, type) => [...Q.importance(type).map(i => ({ label: i.label, value: map.get(i.level) || 0, color: K.IMP_COLORS[i.level], lead: UI.imp({ type, importance: i.level }) })),
@@ -64,11 +64,10 @@ const StatsView = (() => {
     const shown = V.kind === 'day' ? list : list.slice(0, 10);
 
     return h`${head}${controls}
-      <div class="kpis five">
+      <div class="kpis four">
         ${UI.kpi({ label: t('Income'), value: money(cur.income), delta: UI.delta(cur.income, prev.income, { label: cmp }), sub: partial ? t('Up to today') : '', tone: 'inc' })}
         ${UI.kpi({ label: t('Expenses'), value: money(cur.expense), delta: UI.delta(cur.expense, prev.expense, { upGood: false, label: cmp }), sub: t('{amount} per day', { amount: money(Math.round(cur.expense / days)) }), tone: 'exp' })}
         ${UI.kpi({ label: t('Net'), value: money(net, { sign: true }), delta: UI.delta(net, prevNet, { label: cmp }), sub: rate == null ? t('No income in this period') : t('Savings rate {pct}', { pct: U.fmtPct(rate) }), tone: net >= 0 ? 'pos' : 'neg' })}
-        ${UI.kpi({ label: t('Moved to savings'), value: money(cur.saved), sub: t('Transfers into savings and investments') })}
         ${UI.kpi({ label: t('Transactions'), value: String(cur.count), sub: cur.count ? t('{amount} average expense', { amount: money(spends.length ? Math.round(cur.expense / spends.length) : 0) }) : '—' })}
       </div>
 
@@ -87,7 +86,7 @@ const StatsView = (() => {
           <tr class="grp"><td>${t('Expenses')}</td><td class="r num">${money(cur.expense)}</td><td class="r num muted">${money(prev.expense)}</td><td class="r num">${money(cur.expense - prev.expense, { sign: true })}</td></tr>
           ${expLines.map(r => stRow(r))}
           <tr class="total"><td>${t('Net income')}</td><td class="r num ${net < 0 ? 'neg' : 'pos'}">${money(net, { sign: true })}</td><td class="r num muted">${money(prevNet, { sign: true })}</td><td class="r num">${money(net - prevNet, { sign: true })}</td></tr>
-          <tr><td class="muted">${t('Net worth at start → end')}</td><td class="r num" colspan="3">${money(nwStart)} → ${money(nwEnd)} <b class="${nwEnd - nwStart < 0 ? 'neg' : 'pos'}">(${money(nwEnd - nwStart, { sign: true })})</b></td></tr>
+          <tr><td class="muted">${t('Balance at start → end')}</td><td class="r num" colspan="3">${money(nwStart)} → ${money(nwEnd)} <b class="${nwEnd - nwStart < 0 ? 'neg' : 'pos'}">(${money(nwEnd - nwStart, { sign: true })})</b></td></tr>
         </tbody></table></div>`, { cls: 's7' })}
 
         ${UI.card(t('Highlights'), h`<ul class="hlights">

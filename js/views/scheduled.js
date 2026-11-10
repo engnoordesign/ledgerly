@@ -2,14 +2,14 @@
 const ScheduledView = (() => {
   const V = {};
   const { h, money } = U;
-  const sign = r => r.type === 'income' ? '+' : r.type === 'expense' ? '−' : '';
+  const sign = r => r.type === 'income' ? '+' : '−';
 
   const rowHtml = r => {
-    const next = Q.nextOccurrence(r), cat = Q.cat(r.categoryId), acc = Q.acc(r.accountId), to = Q.acc(r.toAccountId);
+    const next = Q.nextOccurrence(r), cat = Q.cat(r.categoryId);
     const off = r.active === false;
     return h`<div class="srow${off ? ' off' : ''}">
-      ${r.type === 'transfer' ? h`<span class="cico sq" style="--c:#64748b;--s:36px">${UI.icon('swap', 19)}</span>` : UI.catIcon(cat || { color: '#64748b', icon: r.type === 'income' ? 'banknote' : 'tag' }, 36)}
-      <div class="s-main"><b>${r.name}</b><span class="tx-meta"><span>${t(K.FREQ[r.frequency])}</span><span class="dotsep">·</span><span>${acc ? acc.name : '?'}${r.type === 'transfer' ? ' → ' + (to ? to.name : '?') : ''}</span>
+      ${UI.catIcon(cat || { color: '#64748b', icon: r.type === 'income' ? 'banknote' : 'tag' }, 36)}
+      <div class="s-main"><b>${r.name}</b><span class="tx-meta"><span>${t(K.FREQ[r.frequency])}</span>
         ${r.autoPost ? h`<span class="pill info">${t('Auto')}</span>` : h`<span class="pill">${t('Ask me')}</span>`}${off ? h`<span class="pill warn">${t('Paused')}</span>` : ''}</span></div>
       <div class="s-next">${next && !off ? h`<b>${U.relDay(next)}</b><small>${U.fmtDate(next, 'med')}</small>` : h`<small class="muted">${off ? t('Paused') : t('Finished')}</small>`}</div>
       <b class="num amt ${r.type}">${sign(r)}${money(r.amount)}</b>
@@ -39,7 +39,7 @@ const ScheduledView = (() => {
           ${UI.kpi({ label: t('Share of income'), value: inc ? U.fmtPct(exp / inc) : '—', sub: inc && exp / inc > 0.6 ? t('High. Little room left for flexibility.') : t('Fixed costs compared with regular income') })}
         </div>
         <div class="grid">
-          <div class="s8 stack">${group(t('Income'), rs.filter(r => r.type === 'income'))}${group(t('Bills and subscriptions'), rs.filter(r => r.type === 'expense'))}${group(t('Transfers and savings'), rs.filter(r => r.type === 'transfer'))}</div>
+          <div class="s8 stack">${group(t('Income'), rs.filter(r => r.type === 'income'))}${group(t('Bills and subscriptions'), rs.filter(r => r.type === 'expense'))}</div>
           ${UI.card(t('Next 30 days'), byWeek.length ? h`${byWeek.map(([w, us]) => h`<div class="wk"><div class="wk-h">${t('Week of {date}', { date: U.fmtDate(w, 'short') })}</div>
             ${us.map(u => h`<div class="wk-r"><span class="muted">${U.fmtDate(u.date, 'short')}</span><span>${u.r.name}</span><b class="num ${u.r.type === 'income' ? 'pos' : ''}">${sign(u.r)}${money(u.r.amount)}</b></div>`)}</div>`)}
             <div class="wk-t"><span>${t('Money in')}</span><b class="num pos">${money(U.sum(next30.filter(u => u.r.type === 'income'), u => u.r.amount))}</b></div>
@@ -51,27 +51,20 @@ const ScheduledView = (() => {
 
   const form = r => {
     const ed = !!r;
-    const accs = Q.accounts();
-    if (!accs.length) return UI.toast(t('Add an account first.'), { kind: 'warn' });
-    const x = r || { type: 'expense', frequency: 'monthly', startDate: U.today(), autoPost: true, accountId: accs[0].id };
+    const x = r || { type: 'expense', frequency: 'monthly', startDate: U.today(), autoPost: true };
     V.ctl = UI.modal({
       title: ed ? t('Edit scheduled item') : t('Add scheduled item'),
       body: h`<form id="schf" novalidate data-submit="sch:save" data-type="${x.type}" ${ed ? h`data-id="${r.id}"` : ''}>
-        <div class="type-tabs" role="radiogroup" aria-label="${t('Type')}">${[['expense', t('Expense')], ['income', t('Income')], ['transfer', t('Transfer')]].map(([v, l]) => h`<label class="tt ${v}"><input type="radio" name="type" value="${v}" data-change="sch:type" ${v === x.type ? 'checked' : ''}><span>${l}</span></label>`)}</div>
+        <div class="type-tabs two" role="radiogroup" aria-label="${t('Type')}">${[['expense', t('Expense')], ['income', t('Income')]].map(([v, l]) => h`<label class="tt ${v}"><input type="radio" name="type" value="${v}" data-change="sch:type" ${v === x.type ? 'checked' : ''}><span>${l}</span></label>`)}</div>
         <div class="field"><label for="sch-name">${t('Name')}</label><input id="sch-name" name="name" value="${x.name || ''}" required autocomplete="off" placeholder="${t('e.g. Rent')}"></div>
         <div class="row2">
           <div class="field big"><label for="sch-amt">${t('Amount')}</label>${UI.amountInput('sch-amt', x.amount, { name: 'amount' })}</div>
           <div class="field"><label for="sch-freq">${t('Repeats')}</label><select id="sch-freq" name="frequency">${UI.options(Object.entries(K.FREQ).map(([k, v]) => [k, t(v)]), x.frequency)}</select></div>
         </div>
+        <div class="field"><label for="sch-cat">${t('Category')}</label>${UI.categoryInput('sch-cat', x.type === 'income' ? 'income' : 'expense', x.categoryId)}</div>
         <div class="row2">
-          <div class="field"><label for="sch-acc"><span class="not-transfer">${t('Account')}</span><span class="only-transfer">${t('From account')}</span></label><select id="sch-acc" name="accountId">${UI.accountOptions(x.accountId)}</select></div>
-          <div class="field only-transfer"><label for="sch-to">${t('To account')}</label><select id="sch-to" name="toAccountId">${UI.accountOptions(x.toAccountId, { blank: t('Choose account') })}</select></div>
-          <div class="field not-transfer"><label for="sch-cat">${t('Category')}</label>${UI.categoryInput('sch-cat', x.type === 'income' ? 'income' : 'expense', x.categoryId)}</div>
-        </div>
-        <div class="row2 not-transfer">
           <div class="field"><label for="sch-purpose">${t('What is it for?')}</label><input id="sch-purpose" name="purpose" maxlength="200" value="${x.purpose || ''}" autocomplete="off"></div>
           <div class="field"><label for="sch-imp">${t('Importance')}</label><select id="sch-imp" name="importance">${UI.options(Q.importance(x.type === 'income' ? 'income' : 'expense').map(i => [i.level, i.label]), x.importance, t('Not set'))}</select></div></div>
-        <div class="field only-transfer"><label for="sch-goal">${t('Savings goal (optional)')}</label><select id="sch-goal" name="goalId">${UI.options(S.state.goals.map(g => [g.id, g.name]), x.goalId, t('No goal'))}</select></div>
         <div class="row2">
           <div class="field"><label for="sch-start">${t('First date')}</label><input type="date" id="sch-start" name="startDate" value="${x.startDate}" required></div>
           <div class="field"><label for="sch-end">${t('Ends (optional)')}</label><input type="date" id="sch-end" name="endDate" value="${x.endDate || ''}"></div>
@@ -85,14 +78,14 @@ const ScheduledView = (() => {
   App.on('sch:edit', el => form(S.state.recurring.find(r => r.id === el.dataset.id)));
   App.onChange('sch:type', el => {
     const f = el.form; f.dataset.type = el.value;
-    if (el.value !== 'transfer') UI.setCategoryType(f.elements.categoryName, el.value === 'income' ? 'income' : 'expense');
+    UI.setCategoryType(f.elements.categoryName, el.value === 'income' ? 'income' : 'expense');
   });
   App.onSubmit('sch:save', f => {
     const d = UI.read(f);
-    if (d.type !== 'transfer' && d.categoryName && d.name && d.amount > 0) d.categoryId = A.ensureCategory(d.type, d.categoryName, d.importance);
-    else d.categoryId = d.type === 'transfer' ? '' : (A.findCategory(d.type, d.categoryName) || {}).id;
-    const res = A.saveRecurring({ id: f.dataset.id, name: d.name, type: d.type, amount: d.amount, accountId: d.accountId, toAccountId: d.toAccountId, categoryId: d.categoryId,
-      frequency: d.frequency, startDate: d.startDate, endDate: d.endDate, autoPost: d.autoPost, goalId: d.goalId, purpose: d.purpose, importance: d.importance });
+    if (d.categoryName && d.name && d.amount > 0) d.categoryId = A.ensureCategory(d.type, d.categoryName, d.importance);
+    else d.categoryId = (A.findCategory(d.type, d.categoryName) || {}).id;
+    const res = A.saveRecurring({ id: f.dataset.id, name: d.name, type: d.type, amount: d.amount, categoryId: d.categoryId,
+      frequency: d.frequency, startDate: d.startDate, endDate: d.endDate, autoPost: d.autoPost, purpose: d.purpose, importance: d.importance });
     if (res.error) return UI.formError(f, res.error);
     V.ctl.close(); A.processRecurring(); UI.toast(t('Scheduled item saved'));
   });

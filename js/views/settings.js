@@ -29,7 +29,7 @@ const SettingsView = (() => {
             <div class="field"><label for="set-sav">${t('Savings target')}</label><div class="suffix"><input id="set-sav" name="savingsTarget" type="number" min="1" max="90" data-change="set:field" value="${s.savingsTarget}"><span>%</span></div>
               <small class="muted">${t('Share of income you want to keep. Drives insights and the Smart plan.')}</small></div>
             <div class="field"><label for="set-em">${t('Emergency cushion')}</label><div class="suffix"><input id="set-em" name="emergencyMonths" type="number" min="1" max="24" data-change="set:field" value="${s.emergencyMonths}"><span>${t('months')}</span></div>
-              <small class="muted">${t('How many months of spending your savings should cover.')}</small></div>
+              <small class="muted">${t('How many months of spending your balance should cover.')}</small></div>
           </div>`, { cls: 's12' })}
 
         ${UI.card(t('Categories'), h`<div class="cat-cols">
@@ -115,7 +115,7 @@ const SettingsView = (() => {
     if (!await UI.confirm({ title: t('Replace your data with this backup?'), message: t('Everything currently in Ledgerly will be replaced. You can undo this right after.'), confirm: t('Restore') })) return;
     const res = A.importJSON(text);
     if (res.error) return UI.toast(res.error, { kind: 'warn' });
-    UI.toast(t('Restored {a} and {b}.', { a: U.plural(res.accounts, 'account'), b: U.plural(res.transactions, 'transaction') }), { action: undoAction() });
+    UI.toast(t('Restored {n}.', { n: U.plural(res.transactions, 'transaction') }), { action: undoAction() });
   });
   App.on('data:demo', async () => {
     if (S.state.transactions.length && !await UI.confirm({ title: t('Replace your data with sample data?'), message: t('Your current entries will be replaced by a year of example transactions. You can undo this right after.'), confirm: t('Load sample data') })) return;
@@ -128,7 +128,7 @@ const SettingsView = (() => {
     const word = t('ERASE');
     const ctl = UI.modal({
       title: t('Erase everything?'), size: 'sm',
-      body: h`<p class="muted">${t('This deletes all accounts, transactions, budgets and goals from this browser. Download a backup first if you might want them back.')}</p>
+      body: h`<p class="muted">${t('This deletes all transactions, budgets and scheduled items from this browser. Download a backup first if you might want them back.')}</p>
         <div class="field"><label for="erase-in">${t('Type {word} to confirm', { word })}</label><input id="erase-in" autocomplete="off" data-input="data:erasecheck"></div>`,
       footer: h`<button type="button" class="btn" data-close>${t('Cancel')}</button><button type="button" class="btn danger" id="erase-go" data-act="data:erase" disabled>${t('Erase everything')}</button>`,
     });
@@ -145,7 +145,7 @@ const SettingsView = (() => {
   });
 
   /* ---------- first run ---------- */
-  const ob = { name: '', accountName: '', accountType: 'checking', opening: '' };
+  const ob = { name: '', opening: '' };
   V.onboard = () => {
     if (!ob.name) ob.name = set().name || '';
     const s = set();
@@ -161,24 +161,20 @@ const SettingsView = (() => {
           <div class="field"><label for="ob-name">${t('Your name')}</label><input id="ob-name" name="name" value="${ob.name}" autocomplete="off" data-input="ob:keep" placeholder="${t('Optional')}"></div>
           <div class="field"><label for="ob-cur">${t('Currency')}</label><select id="ob-cur" name="currency" data-change="ob:currency">${currencyOptions(s.currency)}</select></div>
         </div>
-        <h3 class="sec-s">${t('Your first account')}</h3>
-        <div class="row3">
-          <div class="field"><label for="ob-acc">${t('Name')}</label><input id="ob-acc" name="accountName" value="${ob.accountName}" autocomplete="off" data-input="ob:keep" placeholder="${t('Main account')}"></div>
-          <div class="field"><label for="ob-type">${t('Type')}</label><select id="ob-type" name="accountType" data-change="ob:keep">${UI.options(Object.entries(K.ACCOUNT_TYPES).map(([k, v]) => [k, t(v.label)]), ob.accountType)}</select></div>
-          <div class="field"><label for="ob-open">${t('Current balance')}</label>${UI.amountInput('ob-open', U.parseAmount(ob.opening) || 0, { name: 'opening', required: false, change: 'ob:keep' })}</div>
-        </div>
+        <div class="field"><label for="ob-open">${t('Current balance')} <small class="muted">${t('Optional')}</small></label>${UI.amountInput('ob-open', U.parseAmount(ob.opening) || 0, { name: 'opening', required: false, change: 'ob:keep' })}
+          <small class="muted">${t('The money you have right now. Ledgerly counts from here.')}</small></div>
         <div class="form-error" role="alert" hidden></div></form>`,
       footer: h`<button type="button" class="btn" data-act="ob:demo">${UI.icon('sparkles', 16)}${t('Explore with sample data')}</button><button type="submit" form="obf" class="btn primary">${t('Start fresh')}</button>`,
     });
     V.ob = ctl;
   };
-  const keepOb = el => { const f = el.form; ob.name = f.elements.name.value; ob.accountName = f.elements.accountName.value; ob.accountType = f.elements.accountType.value; ob.opening = f.elements.opening.value; };
+  const keepOb = el => { const f = el.form; ob.name = f.elements.name.value; ob.opening = f.elements.opening.value; };
   App.onInput('ob:keep', keepOb); App.onChange('ob:keep', keepOb);
   App.onChange('ob:currency', el => { keepOb(el); update({ currency: el.value }); V.ob.close(); V.onboard(); });
   App.on('ob:lang', el => { keepOb(U.$('#ob-name')); update({ lang: el.dataset.v, weekStart: el.dataset.v === 'ar' ? 6 : 1 }); V.ob.close(); V.onboard(); });
   App.onSubmit('ob:start', f => {
     const d = UI.read(f), s = { ...set(), name: d.name.trim() };
-    S.replace(Seed.fresh(s, { name: d.accountName.trim() || t('Main account'), type: d.accountType, opening: Number.isFinite(d.opening) ? d.opening : 0 }));
+    S.replace(Seed.fresh(s, { opening: Number.isFinite(d.opening) ? d.opening : 0 }));
     V.ob.close(); location.hash = '#/dashboard';
     UI.toast(t('All set. Add your first transaction with the + button.'));
   });

@@ -42,7 +42,7 @@ const DataView = (() => {
               <button class="btn" data-act="dx:summary" ${xs.length ? '' : 'disabled'}>${UI.icon('download', 16)}<span>${t('Download')}</span></button></div>
             <div class="io"><span class="io-i">${UI.icon('printer', 20)}</span><div><b>${t('Printable statement (PDF)')}</b><small class="muted">${t('A tidy statement of income and expenses for a day, week, month, year or any dates. Print it or save it as a PDF.')}</small></div>
               <button class="btn" data-act="stmt:open" data-kind="custom" data-from="${stmtFrom}" data-to="${stmtTo}">${UI.icon('printer', 16)}<span>${t('Open')}</span></button></div>
-            <div class="io"><span class="io-i">${UI.icon('shield', 20)}</span><div><b>${t('Full backup (JSON)')}</b><small class="muted">${t('Everything: accounts, categories, budgets, goals and settings. Restore it here on any device.')}</small>
+            <div class="io"><span class="io-i">${UI.icon('shield', 20)}</span><div><b>${t('Full backup (JSON)')}</b><small class="muted">${t('Everything: transactions, categories, budgets, scheduled items and settings. Restore it here on any device.')}</small>
               <small class="backup ${backupAge == null || backupAge > 30 ? 'warn' : ''}">${meta.lastBackup ? t('Last backup: {date}', { date: U.fmtDate(meta.lastBackup, 'med') }) : t('You have not made a backup yet.')}</small></div>
               <button class="btn" data-act="data:export">${UI.icon('download', 16)}<span>${t('Download')}</span></button></div>
           </div>`, { cls: 's7' })}

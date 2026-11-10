@@ -3,7 +3,7 @@
    The sheet is plain HTML styled for paper. Printing uses the browser's own print engine (window.print), which shapes Arabic
    and right-to-left layouts correctly and lets the person choose "Save as PDF" as the printer. */
 const StatementView = (() => {
-  const V = { kind: 'month', anchor: U.today(), from: '', to: '', cats: true, accs: true, list: true, transfers: false, paper: 'A4' };
+  const V = { kind: 'month', anchor: U.today(), from: '', to: '', cats: true, list: true, paper: 'A4' };
   const { h, money } = U;
   const PAPER = { A4: 794, Letter: 816 };            // sheet width in CSS px at 96 dpi
   try { const p = localStorage.getItem('ledgerly:paper'); if (PAPER[p]) V.paper = p; } catch (e) { /* storage blocked */ }
@@ -18,9 +18,8 @@ const StatementView = (() => {
   const amt = v => h`<span class="num">${money(v)}</span>`;
   const dash = h`<span class="num rpt-nil">–</span>`;
   const cell = v => v ? amt(v) : dash;
-  const accName = id => { const a = Q.acc(id); return a ? a.name : '—'; };
   const primary = x => x.purpose || UI.txTitle(x);
-  const secondary = x => [x.purpose ? (x.payee || '') : '', x.note && x.note !== primary(x) ? x.note : '', x.type !== 'transfer' ? Q.importanceLabel(x.type, x.importance) : ''].filter(Boolean).join(' · ');
+  const secondary = x => [x.purpose ? (x.payee || '') : '', x.note && x.note !== primary(x) ? x.note : '', Q.importanceLabel(x.type, x.importance)].filter(Boolean).join(' · ');
   const rowLabel = (g, r) => g === 'day' ? h`${U.fmtDate(r.from, 'weekday')} · ${U.fmtDate(r.from, 'med')}`
     : g === 'week' ? U.fmtRange(r.from, r.to)
     : r.from === U.monthStart(r.from.slice(0, 7)) && r.to === U.monthEnd(r.from.slice(0, 7)) ? U.fmtMonth(r.from.slice(0, 7)) : U.fmtRange(r.from, r.to);
@@ -36,7 +35,7 @@ const StatementView = (() => {
     const [from, to] = range(), d = Q.statement(from, to), today = U.today();
     const who = (Auth.profile && Auth.profile.name) || S.state.settings.name || '';
     const ref = `LG-${from.replace(/-/g, '')}-${to.replace(/-/g, '')}`;
-    const items = V.transfers ? d.items : d.items.filter(x => x.type !== 'transfer');
+    const items = d.items;
     const sameYear = from.slice(0, 4) === to.slice(0, 4);
     const entries = d.incomeCount + d.expenseCount;
     const grainHead = { day: t('Day'), week: t('Week'), month: t('Month') }[d.grain];
@@ -61,14 +60,13 @@ const StatementView = (() => {
         <div class="rpt-box net"><small>${t('Net result')}</small><b>${h`<span class="num">${money(d.net, { sign: true })}</span>`}</b><span>${d.rate == null ? t('No income in this period') : t('Savings rate {pct}', { pct: U.fmtPct(d.rate) })}</span></div>
       </section>
 
-      <section class="rpt-sec rpt-keep"><h2>${t('Balance of all accounts')}</h2>
+      <section class="rpt-sec rpt-keep"><h2>${t('Balance')}</h2>
         <table class="rpt-t rpt-bal"><tbody>
           <tr><td>${t('Opening balance')}</td><td class="r">${amt(d.opening)}</td></tr>
           <tr><td>${t('Plus income')}</td><td class="r">${amt(d.income)}</td></tr>
           <tr><td>${t('Less expenses')}</td><td class="r">${h`<span class="num">${money(-d.expense)}</span>`}</td></tr>
           <tr class="tot"><td>${t('Closing balance')}</td><td class="r">${amt(d.closing)}</td></tr>
         </tbody></table>
-        ${d.transferCount ? h`<p class="rpt-note">${t('Transfers between your own accounts are not income or expenses and do not change this balance.')}</p>` : ''}
       </section>
 
       ${d.grain ? h`<section class="rpt-sec"><h2>${grainTitle}</h2>
@@ -79,22 +77,14 @@ const StatementView = (() => {
 
       ${V.cats ? h`<div class="rpt-cols">${catTable(t('Income by category'), d.incomeCats, d.income, 'inc')}${catTable(t('Expenses by category'), d.expenseCats, d.expense, 'exp')}</div>` : ''}
 
-      ${V.accs ? h`<section class="rpt-sec rpt-keep"><h2>${t('Accounts')}</h2>
-        <table class="rpt-t"><thead><tr><th>${t('Account')}</th><th class="r">${t('Opening')}</th><th class="r">${t('Money in')}</th><th class="r">${t('Money out')}</th><th class="r">${t('Closing')}</th></tr></thead><tbody>
-          ${d.accounts.map(r => h`<tr><td>${r.acc.name}<small class="rpt-sub">${t(Q.accType(r.acc).label)}</small></td><td class="r">${amt(r.opening)}</td><td class="r">${cell(r.in)}</td><td class="r">${cell(r.out)}</td><td class="r">${amt(r.closing)}</td></tr>`)}
-          <tr class="tot"><td>${t('Total')}</td><td class="r">${amt(d.opening)}</td><td class="r">${amt(U.sum(d.accounts, r => r.in))}</td><td class="r">${amt(U.sum(d.accounts, r => r.out))}</td><td class="r">${amt(d.closing)}</td></tr>
-        </tbody></table>
-        <p class="rpt-note">${t('Account figures include transfers between your accounts.')}</p></section>` : ''}
-
       ${V.list ? h`<section class="rpt-sec"><h2>${t('Transactions')}</h2>${items.length
-        ? h`<table class="rpt-t rpt-tx${V.transfers ? ' tr3' : ''}"><colgroup><col class="c-d"><col class="c-t"><col class="c-c"><col class="c-a"><col class="c-m"><col class="c-m">${V.transfers ? h`<col class="c-m">` : ''}</colgroup><thead><tr><th>${t('Date')}</th><th>${t('Details')}</th><th>${t('Category')}</th><th>${t('Account')}</th><th class="r">${t('Income')}</th><th class="r">${t('Expenses')}</th>${V.transfers ? h`<th class="r">${t('Transfers')}</th>` : ''}</tr></thead><tbody>
-          ${items.map(x => { const tr = x.type === 'transfer', sub = secondary(x); return h`<tr>
+        ? h`<table class="rpt-t rpt-tx"><colgroup><col class="c-d"><col class="c-t"><col class="c-c"><col class="c-m"><col class="c-m"></colgroup><thead><tr><th>${t('Date')}</th><th>${t('Details')}</th><th>${t('Category')}</th><th class="r">${t('Income')}</th><th class="r">${t('Expenses')}</th></tr></thead><tbody>
+          ${items.map(x => { const sub = secondary(x); return h`<tr>
             <td class="rpt-d"><span class="num">${U.fmtDate(x.date, sameYear ? 'short' : 'med')}</span></td>
             <td><b>${primary(x)}</b>${sub ? h`<small class="rpt-sub">${sub}</small>` : ''}</td>
-            <td>${tr ? t('Transfer') : Q.catName(Q.cat(x.categoryId))}</td>
-            <td>${tr ? h`${accName(x.accountId)} <span class="arr">→</span> ${accName(x.toAccountId)}` : accName(x.accountId)}</td>
-            <td class="r">${x.type === 'income' ? amt(x.amount) : ''}</td><td class="r">${x.type === 'expense' ? amt(x.amount) : ''}</td>${V.transfers ? h`<td class="r">${tr ? amt(x.amount) : ''}</td>` : ''}</tr>`; })}
-          <tr class="tot"><td colspan="4">${t('Total')}</td><td class="r">${amt(d.income)}</td><td class="r">${amt(d.expense)}</td>${V.transfers ? h`<td class="r">${amt(d.transferTotal)}</td>` : ''}</tr>
+            <td>${Q.catName(Q.cat(x.categoryId))}</td>
+            <td class="r">${x.type === 'income' ? amt(x.amount) : ''}</td><td class="r">${x.type === 'expense' ? amt(x.amount) : ''}</td></tr>`; })}
+          <tr class="tot"><td colspan="3">${t('Total')}</td><td class="r">${amt(d.income)}</td><td class="r">${amt(d.expense)}</td></tr>
         </tbody></table>`
         : h`<p class="rpt-none">${entries ? t('Nothing to list.') : t('No income or expenses were recorded in this period.')}</p>`}</section>` : ''}
 
@@ -117,7 +107,7 @@ const StatementView = (() => {
       ? h`<div class="field"><label>${t('From')} / ${t('To')}</label><div class="range-in"><input type="date" id="stmt-from" data-change="stmt:from" value="${V.from}" aria-label="${t('From')}"><span>→</span><input type="date" id="stmt-to" data-change="stmt:to" value="${V.to}" aria-label="${t('To')}"></div></div>`
       : h`<div class="field"><label>${t('Period')}</label>${nav()}</div>`}
     <div class="field"><label>${t('Include')}</label>
-      ${check('cats', t('Totals by category'))}${check('accs', t('Account balances'))}${check('list', t('List of transactions'))}${check('transfers', t('Transfers between accounts'))}</div>
+      ${check('cats', t('Totals by category'))}${check('list', t('List of transactions'))}</div>
     <div class="field"><label for="stmt-paper">${t('Paper size')}</label><select id="stmt-paper" data-change="stmt:paper">${UI.options([['A4', 'A4'], ['Letter', 'Letter']], V.paper)}</select></div>
     <p class="muted small">${t('In the print window, choose “Save as PDF” as the destination to get a PDF file.')}</p>`;
 

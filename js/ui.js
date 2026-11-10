@@ -105,8 +105,6 @@ const UI = (() => {
   /* ---------- components ---------- */
   UI.catIcon = (c, size = 34) => { const k = c || { color: '#64748b', icon: 'tag' }; return h`<span class="cico" style="--c:${k.color};--s:${size}px">${UI.icon(k.icon || 'tag', Math.round(size * 0.52))}</span>`; };
   UI.catChip = c => h`<span class="cchip" style="--c:${c.color}"><i></i>${Q.catName(c)}</span>`;
-  UI.accIcon = (a, size = 38) => h`<span class="cico sq" style="--c:${a.color};--s:${size}px">${UI.icon(Q.accType(a).icon, Math.round(size * 0.52))}</span>`;
-  UI.goalIcon = (g, size = 38) => h`<span class="cico" style="--c:${g.color};--s:${size}px">${UI.icon('target', Math.round(size * 0.52))}</span>`;
 
   UI.delta = (cur, prev, { upGood = true, label } = {}) => {
     if (!prev && !cur) return h``;
@@ -134,29 +132,25 @@ const UI = (() => {
     <button type="button" class="mlabel" data-act="${act}" data-v="0" data-tip="${t('Jump to this month')}">${U.fmtMonth(key)}</button>
     <button type="button" class="btn icon ghost" data-act="${act}" data-v="1" aria-label="${t('Next month')}">${UI.icon('chevron-right', 18, 'flip')}</button></div>`;
 
-  UI.txTitle = x => x.payee || x.note || (x.type === 'transfer' ? t('Transfer') : x.type === 'income' ? t('Income') : Q.catName(Q.cat(x.categoryId)));
-  UI.txIcon = x => x.type === 'transfer'
-    ? h`<span class="cico sq" style="--c:#64748b;--s:36px">${UI.icon('swap', 19)}</span>` : UI.catIcon(Q.cat(x.categoryId) || { color: '#64748b', icon: x.type === 'income' ? 'banknote' : 'tag' }, 36);
+  UI.txTitle = x => x.payee || x.note || (x.type === 'income' ? t('Income') : Q.catName(Q.cat(x.categoryId)));
+  UI.txIcon = x => UI.catIcon(Q.cat(x.categoryId) || { color: '#64748b', icon: x.type === 'income' ? 'banknote' : 'tag' }, 36);
   /** Four dots, filled up to the importance level. Never relies on colour alone. */
   UI.imp = x => {
     const lab = Q.importanceLabel(x.type, x.importance);
     return h`<span class="imp l${x.importance}" data-tip="${lab}" role="img" aria-label="${t('Importance: {level}', { level: lab })}">${[1, 2, 3, 4].map(n => h`<i class="${n <= x.importance ? 'on' : ''}"></i>`)}</span>`;
   };
-  UI.txAmount = x => h`<b class="num amt ${x.type}">${x.type === 'income' ? '+' : x.type === 'expense' ? '−' : ''}${money(x.amount)}</b>`;
+  UI.txAmount = x => h`<b class="num amt ${x.type}">${x.type === 'income' ? '+' : '−'}${money(x.amount)}</b>`;
   /** One transaction row. opts: {date, select, actions} */
   UI.txRow = (x, o = {}) => {
-    const cat = Q.cat(x.categoryId), acc = Q.acc(x.accountId), to = Q.acc(x.toAccountId), future = x.date > U.today();
-    const meta = x.type === 'transfer'
-      ? h`<span>${acc ? acc.name : '?'}</span>${UI.icon('arrow-right', 12, 'flip')}<span>${to ? to.name : '?'}</span>`
-      : h`${cat ? UI.catChip(cat) : h`<span class="muted">${t('Uncategorized')}</span>`}<span class="dotsep">·</span><span>${acc ? acc.name : '?'}</span>`;
+    const cat = Q.cat(x.categoryId), future = x.date > U.today();
+    const meta = cat ? UI.catChip(cat) : h`<span class="muted">${t('Uncategorized')}</span>`;
     return h`<div class="txr${o.select ? ' sel' : ''}" data-id="${x.id}" data-act="tx:edit">
       ${o.select ? h`<label class="chk" data-act="noop"><input type="checkbox" data-change="tx:pick" data-id="${x.id}" ${o.picked ? 'checked' : ''} aria-label="${t('Select')}"><i></i></label>` : ''}
       ${UI.txIcon(x)}
       <div class="tx-main"><b class="tx-title">${UI.txTitle(x)}</b><span class="tx-meta">${meta}${x.purpose ? h`<span class="purpose">${x.purpose}</span>` : ''}${(x.tags || []).slice(0, 2).map(g => h`<span class="tag">#${g}</span>`)}${future ? h`<span class="pill info">${t('Scheduled')}</span>` : ''}</span></div>
       ${o.date ? h`<span class="tx-date">${o.date === 'rel' ? U.relDay(x.date) : U.fmtDate(x.date, 'short')}</span>` : ''}
-      ${x.importance && x.type !== 'transfer' ? UI.imp(x) : ''}${UI.txAmount(x)}
+      ${x.importance ? UI.imp(x) : ''}${UI.txAmount(x)}
       ${o.actions ? h`<div class="tx-actions">
-        <button type="button" class="btn icon ghost sm${x.cleared ? ' on' : ''}" data-act="tx:clear" data-id="${x.id}" data-tip="${x.cleared ? t('Cleared') : t('Mark as cleared')}">${UI.icon('check', 15)}</button>
         <button type="button" class="btn icon ghost sm" data-act="tx:edit" data-id="${x.id}" data-tip="${t('Edit')}">${UI.icon('edit', 15)}</button>
         <button type="button" class="btn icon ghost sm" data-act="tx:dup" data-id="${x.id}" data-tip="${t('Duplicate')}">${UI.icon('copy', 15)}</button>
         <button type="button" class="btn icon ghost sm" data-act="tx:del" data-id="${x.id}" data-tip="${t('Delete')}">${UI.icon('trash', 15)}</button></div>` : ''}
@@ -185,8 +179,6 @@ const UI = (() => {
   };
   UI.options = (list, selected, blank) =>
     h`${blank != null ? h`<option value="">${blank}</option>` : ''}${list.map(([v, l]) => h`<option value="${v}" ${String(v) === String(selected) ? 'selected' : ''}>${l}</option>`)}`;
-  UI.accountOptions = (selected, { exclude, blank, all = false } = {}) =>
-    UI.options(Q.accounts(all).filter(a => a.id !== exclude || a.id === selected).map(a => [a.id, a.name]), selected, blank);
   /** A typed category: any name, with the existing ones suggested while typing. New names become new categories on save. */
   UI.categoryInput = (id, type, selectedId) => {
     const c = Q.cat(selectedId);

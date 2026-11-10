@@ -21,14 +21,14 @@ const DashboardView = (() => {
     // a month in progress is compared with the same point last month, not with a finished month
     const prev = isCur ? (() => { const s = U.monthStart(pk), me = U.monthEnd(pk), e = U.addDays(s, +U.today().slice(8, 10) - 1); return Q.sumDays(s, e > me ? me : e); })() : Q.month(pk);
     const cmpLabel = isCur ? t('vs same point last month') : t('vs previous period');
-    const nw = Q.netWorth(), nws = Q.netWorthSeries(12), nwPrev = nws[10].value;
+    const bal = Q.balance(), balPrev = Q.balanceSeries(12)[10].value;
     const net = cur.income - cur.expense, prevNet = prev.income - prev.expense;
     const anchor = isCur ? U.today() : U.monthEnd(mk);
     const bars = Q.trend(V.period, anchor);
     const winIncome = U.sum(bars, b => b.income), winExpense = U.sum(bars, b => b.expense);
     const top = Q.topCats(cur.exp, 6), insights = Q.insights(mk), health = Q.health(mk);
     const recent = Q.sorted().filter(x => x.date <= U.today()).slice(0, 7);
-    const upcoming = Q.upcoming(14).slice(0, 5), goals = S.state.goals.map(g => ({ g, i: Q.goalInfo(g) })).sort((a, b) => a.i.done - b.i.done || b.i.pct - a.i.pct).slice(0, 3);
+    const upcoming = Q.upcoming(14).slice(0, 5);
     const rh = Q.rhythm();
     const today = U.today(), wk = Q.periodRange('week', today), mo = Q.periodRange('month', today);
     const lv = [
@@ -43,12 +43,10 @@ const DashboardView = (() => {
       ${UI.pageHead({ title: greeting(), sub: U.fmtDate(U.today(), 'long'), actions: h`${UI.monthNav(mk, 'dash:month')}<button class="btn primary" data-act="tx:new">${UI.icon('plus', 16)}<span>${t('New transaction')}</span></button>` })}
       <div class="grid">
         <div class="kpis s12">
+          ${UI.kpi({ label: t('Balance'), value: money(bal), delta: UI.delta(bal, balPrev, { label: t('vs end of last month') }), sub: t('Up to today'), tone: bal < 0 ? 'neg' : '' })}
           ${UI.kpi({ label: t('Income'), value: money(cur.income), delta: UI.delta(cur.income, prev.income, { label: cmpLabel }), sub: isCur ? t('{month} so far', { month: U.fmtMonth(mk, 'month') }) : t('{month} total', { month: U.fmtMonth(mk, 'month') }), tone: 'inc' })}
           ${UI.kpi({ label: t('Expenses'), value: money(cur.expense), delta: UI.delta(cur.expense, prev.expense, { upGood: false, label: cmpLabel }), sub: t('{n} entries', { n: cur.count }), tone: 'exp' })}
           ${UI.kpi({ label: t('Net saved'), value: money(net, { sign: true }), delta: UI.delta(net, prevNet, { label: cmpLabel }), sub: cur.income ? t('{pct} of income', { pct: U.fmtPct(net / cur.income) }) : t('No income yet'), tone: net >= 0 ? 'pos' : 'neg' })}
-          ${tot.plannedExpense
-            ? UI.kpi({ label: t('Budget left'), value: money(tot.plannedExpense - tot.actualExpense), sub: t('{pct} of budget used', { pct: U.fmtPct(used) }), tone: used > 1 ? 'neg' : '' })
-            : UI.kpi({ label: t('Budget left'), value: '—', sub: h`<a href="#/plans">${t('Pick a ready-made plan')}</a>` })}
         </div>
 
         ${UI.card(t('Today, this week, this month'), h`<div class="levels3">${lv.map(l => h`<a class="lv" href="#/transactions?group=${l.group}&range=${l.range}">
@@ -75,15 +73,8 @@ const DashboardView = (() => {
           { cls: 's8', actions: h`<a class="btn ghost sm" href="#/transactions">${t('View all')}</a>` })}
 
         <details class="dash-more s12" ${V.more ? 'open' : ''} data-toggle-key="dash">
-          <summary class="btn ghost">${UI.icon('chevron-right', 16, 'flip')}<span>${V.more ? t('Show less') : t('More: net worth, budget, insights, goals')}</span></summary>
+          <summary class="btn ghost">${UI.icon('chevron-right', 16, 'flip')}<span>${V.more ? t('Show less') : t('More: budget, insights, coming up')}</span></summary>
           <div class="grid">
-        <section class="card hero-card s4">
-          <div class="k-top"><span class="k-label">${t('Net worth')}</span>${UI.delta(nw.net, nwPrev, { label: t('vs end of last month') })}</div>
-          <div class="hero-num num">${money(nw.net)}</div>
-          <div class="muted small">${nw.net - nwPrev >= 0 ? t('{amount} up since last month', { amount: money(nw.net - nwPrev) }) : t('{amount} down since last month', { amount: money(nwPrev - nw.net) })}</div>
-          <div class="hero-spark">${C.spark(nws.map(p => p.value))}</div>
-          <div class="hero-split"><div><span class="k-label">${t('Assets')}</span><b class="num">${money(nw.assets)}</b></div><div><span class="k-label">${t('Liabilities')}</span><b class="num">${money(nw.liabilities)}</b></div></div>
-        </section>
         ${UI.card(t('Budget'), tot.plannedExpense ? h`
           <div class="bud-top"><b class="num">${money(tot.actualExpense)}</b><span class="muted">${t('of {amount}', { amount: money(tot.plannedExpense) })}</span></div>
           ${C.meter(used)}
@@ -101,13 +92,9 @@ const DashboardView = (() => {
             <span class="up-d ${u.overdue ? 'due' : ''}"><b>${U.fmtDate(u.date, 'day')}</b><small>${U.fmtMonth(u.date.slice(0, 7), 'short')}</small></span>
             <span class="up-n"><b>${u.r.name}</b><small>${u.overdue ? t('Needs your confirmation') : U.relDay(u.date)}</small></span>
             ${u.overdue && !u.r.autoPost ? h`<span class="up-a"><button class="btn sm primary" data-act="sch:confirm" data-id="${u.r.id}">${t('Confirm')}</button><button class="btn sm ghost" data-act="sch:skip" data-id="${u.r.id}">${t('Skip')}</button></span>`
-              : h`<b class="num amt ${u.r.type}">${u.r.type === 'income' ? '+' : u.r.type === 'expense' ? '−' : ''}${money(u.r.amount)}</b>`}</li>`)}</ul>`
+              : h`<b class="num amt ${u.r.type}">${u.r.type === 'income' ? '+' : '−'}${money(u.r.amount)}</b>`}</li>`)}</ul>`
           : UI.empty({ icon: 'calendar', title: t('Nothing scheduled'), text: t('Rent, salary and subscriptions can repeat on their own.'), action: h`<a class="btn" href="#/scheduled">${t('Add scheduled')}</a>` }),
           { cls: 's4', actions: h`<a class="btn ghost sm" href="#/scheduled">${t('All')}</a>` })}
-
-        ${UI.card(t('Savings goals'), goals.length ? h`<ul class="goal-mini">${goals.map(({ g, i }) => h`<li><a href="#/goals">${C.ring({ pct: i.pct, size: 52, color: g.color })}<span><b>${g.name}</b><small class="num">${money(i.saved)} / ${money(i.target)}</small></span></a></li>`)}</ul>`
-          : UI.empty({ icon: 'target', title: t('No goals yet'), text: t('Save towards something specific and watch it grow.'), action: h`<a class="btn" href="#/goals">${t('Create a goal')}</a>` }),
-          { cls: 's4', actions: h`<a class="btn ghost sm" href="#/goals">${t('All')}</a>` })}
 
         ${UI.card(t('Your rhythm'), rh.hasData ? h`
           <div class="table-wrap"><table class="rhythm"><thead><tr><th></th>${[t('Day'), t('Week'), t('Month'), t('Year')].map(l => h`<th>${l}</th>`)}</tr></thead><tbody>
@@ -123,7 +110,7 @@ const DashboardView = (() => {
   document.addEventListener('toggle', e => {
     if (!e.target.matches || !e.target.matches('details[data-toggle-key="dash"]')) return;
     V.more = e.target.open; try { localStorage.setItem('ledgerly:dash-more', V.more ? '1' : '0'); } catch (err) { /* ignore */ }
-    const lab = U.$('span', e.target.firstElementChild); if (lab) lab.textContent = V.more ? t('Show less') : t('More: net worth, budget, insights, goals');
+    const lab = U.$('span', e.target.firstElementChild); if (lab) lab.textContent = V.more ? t('Show less') : t('More: budget, insights, coming up');
   }, true);
   App.on('dash:period', el => { V.period = el.dataset.v; App.render(); });
   App.on('dash:month', el => {

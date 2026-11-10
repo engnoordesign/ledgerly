@@ -110,7 +110,7 @@ const Sync = (() => {
 
   /* ---------- both sides changed: the user decides ---------- */
   const ask = (mine, theirs, remote) => new Promise(resolve => {
-    const col = (title, s, note) => h`<div class="cf-col"><b>${title}</b><span>${U.plural(s.transactions, 'transaction')}</span><span>${U.plural(s.accounts, 'account')}</span>${note ? h`<small class="muted">${note}</small>` : ''}</div>`;
+    const col = (title, s, note) => h`<div class="cf-col"><b>${title}</b><span>${U.plural(s.transactions, 'transaction')}</span>${note ? h`<small class="muted">${note}</small>` : ''}</div>`;
     const ctl = UI.modal({
       title: t('This profile changed on two devices'), sticky: true,
       body: h`<p class="muted">${t('You made changes here while another device saved different changes. Choose what to keep.')}</p>

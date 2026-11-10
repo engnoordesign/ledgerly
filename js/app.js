@@ -7,7 +7,7 @@
     ['dashboard', 'grid', t('Home')], ['transactions', 'receipt', t('Transactions')], ['stats', 'chart', t('Statistics')], ['budget', 'pie', t('Budget')],
     ['data', 'download', t('Import & Export')], ['settings', 'settings', t('Settings')],
   ];
-  const MORE = () => [['accounts', 'wallet', t('Accounts')], ['goals', 'target', t('Goals')], ['scheduled', 'repeat', t('Scheduled')], ['plans', 'sparkles', t('Plans')]];
+  const MORE = () => [['scheduled', 'repeat', t('Scheduled')], ['plans', 'sparkles', t('Plans')]];
   const ALL = () => [...NAV(), ...MORE()];
   const sideMore = () => { try { return localStorage.getItem('ledgerly:side-more') === '1'; } catch (e) { return false; } };
 
@@ -40,7 +40,6 @@
     U.$('#topbar').innerHTML = String(h`
       <a class="brand sm" href="#/dashboard" aria-label="Ledgerly"><svg class="logo" width="28" height="28" aria-hidden="true"><use href="#logo"/></svg><span>Ledgerly</span></a>
       <div class="top-actions">${AccountView.topButton()}
-        <button class="btn ghost icon" data-act="app:qr" aria-label="${t('Open on another device')}">${UI.icon('qr', 18)}</button>
         <button class="btn ghost icon" data-act="set:lang" data-v="${s.lang === 'ar' ? 'en' : 'ar'}" aria-label="${s.lang === 'ar' ? 'English' : 'العربية'}"><b>${s.lang === 'ar' ? 'EN' : 'ع'}</b></button>
         <button class="btn ghost icon" data-act="app:theme" aria-label="${effectiveDark() ? t('Switch to light mode') : t('Switch to dark mode')}">${UI.icon(effectiveDark() ? 'sun' : 'moon', 18)}</button>
       </div>`);

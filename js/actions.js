@@ -8,30 +8,22 @@ const A = (() => {
 
   /* ---------- transactions ---------- */
   A.validateTx = x => {
-    if (!['income', 'expense', 'transfer'].includes(x.type)) return t('Choose a type.');
+    if (!['income', 'expense'].includes(x.type)) return t('Choose a type.');
     if (!Number.isFinite(x.amount) || x.amount <= 0) return t('Enter an amount greater than zero.');
     if (!U.isDate(x.date)) return t('Enter a valid date.');
-    if (!Q.acc(x.accountId)) return x.type === 'transfer' ? t('Choose the account the money leaves.') : t('Choose an account.');
-    if (x.type === 'transfer') {
-      if (!Q.acc(x.toAccountId)) return t('Choose the account the money goes to.');
-      if (x.toAccountId === x.accountId) return t('Pick two different accounts.');
-    }
     return null;
   };
   const normImp = v => { const n = Math.round(+v); return n >= 1 && n <= 4 ? n : undefined; };   // 1 = lowest, 4 = highest
-  const build = (t, base) => {
-    const tr = t.type === 'transfer';
-    return {
-      id: (base && base.id) || U.uid('t'), type: t.type, date: t.date, amount: Math.round(t.amount),
-      accountId: t.accountId, toAccountId: tr ? t.toAccountId : undefined,
-      categoryId: tr ? undefined : (t.categoryId || undefined),
-      payee: clean(t.payee), note: clean(t.note), tags: normTags(t.tags), cleared: !!t.cleared,
-      purpose: tr ? undefined : (clean(t.purpose).slice(0, 200) || undefined), importance: tr ? undefined : normImp(t.importance),
-      goalId: t.goalId || undefined, recurringId: t.recurringId || undefined,
-      recurringIndex: t.recurringIndex != null ? t.recurringIndex : undefined,
-      createdAt: (base && base.createdAt) || Date.now(),
-    };
-  };
+  const build = (t, base) => ({
+    id: (base && base.id) || U.uid('t'), type: t.type, date: t.date, amount: Math.round(t.amount),
+    accountId: Q.main().id,
+    categoryId: t.categoryId || undefined,
+    payee: clean(t.payee), note: clean(t.note), tags: normTags(t.tags !== undefined ? t.tags : base && base.tags),
+    purpose: clean(t.purpose).slice(0, 200) || undefined, importance: normImp(t.importance),
+    recurringId: t.recurringId || undefined,
+    recurringIndex: t.recurringIndex != null ? t.recurringIndex : undefined,
+    createdAt: (base && base.createdAt) || Date.now(),
+  });
   A.addTx = t => {
     const error = A.validateTx(t); if (error) return { error };
     const tx = build(t);
@@ -52,35 +44,9 @@ const A = (() => {
     return removed;
   };
   A.restoreTx = list => S.commit(st => { st.transactions.push(...list); });
-  A.setCleared = (ids, flag) => {
-    const set = new Set(ids);
-    S.commit(st => { st.transactions.forEach(t => { if (set.has(t.id)) t.cleared = flag; }); });
-  };
   A.recategorize = (ids, categoryId) => {
     const set = new Set(ids);
-    S.commit(st => { st.transactions.forEach(t => { if (set.has(t.id) && t.type !== 'transfer') t.categoryId = categoryId || undefined; }); });
-  };
-
-  /* ---------- accounts ---------- */
-  A.saveAccount = a => {
-    const name = clean(a.name);
-    if (!name) return { error: t('Give the account a name.') };
-    if (!K.ACCOUNT_TYPES[a.type]) return { error: t('Choose an account type.') };
-    if (S.state.accounts.some(x => x.id !== a.id && x.name.toLowerCase() === name.toLowerCase())) return { error: t('You already have an account with that name.') };
-    const opening = Number.isFinite(a.opening) ? Math.round(a.opening) : 0;
-    let id = a.id;
-    S.commit(st => {
-      if (id) { const x = st.accounts.find(z => z.id === id); Object.assign(x, { name, type: a.type, opening, color: a.color || x.color }); }
-      else { id = U.uid('a'); st.accounts.push({ id, name, type: a.type, opening, color: a.color || K.PALETTE[st.accounts.length % K.PALETTE.length] }); }
-    });
-    return { id };
-  };
-  A.archiveAccount = (id, flag) => S.commit(st => { const a = st.accounts.find(x => x.id === id); if (a) a.archived = flag; });
-  A.deleteAccount = id => {
-    if (S.state.transactions.some(t => t.accountId === id || t.toAccountId === id)) return { error: t('This account has transactions. Archive it instead to keep your history.') };
-    if (S.state.goals.some(g => g.accountId === id) || S.state.recurring.some(r => r.accountId === id || r.toAccountId === id)) return { error: t('A goal or scheduled item uses this account. Archive it instead.') };
-    S.commit(st => { st.accounts = st.accounts.filter(a => a.id !== id); });
-    return {};
+    S.commit(st => { st.transactions.forEach(t => { if (set.has(t.id)) t.categoryId = categoryId || undefined; }); });
   };
 
   /* ---------- categories ---------- */
@@ -174,43 +140,6 @@ const A = (() => {
     st.budgets[month] = { lines: { ...built.lines }, savings: Math.max(0, Math.round(built.savings)), planId };
   });
 
-  /* ---------- goals ---------- */
-  A.saveGoal = g => {
-    const name = clean(g.name);
-    if (!name) return { error: t('Give the goal a name.') };
-    if (!(g.target > 0)) return { error: t('Enter a target amount greater than zero.') };
-    if (!Q.acc(g.accountId)) return { error: t('Choose the account where this money is kept.') };
-    if (g.deadline && !U.isDate(g.deadline)) return { error: t('Enter a valid target date.') };
-    let id = g.id;
-    S.commit(st => {
-      const body = { name, target: Math.round(g.target), deadline: g.deadline || undefined, accountId: g.accountId, color: g.color, initial: Math.round(g.initial || 0), note: clean(g.note) };
-      if (id) Object.assign(st.goals.find(x => x.id === id), body);
-      else { id = U.uid('g'); st.goals.push({ id, ...body }); }
-    });
-    return { id };
-  };
-  A.deleteGoal = id => S.commit(st => {
-    st.goals = st.goals.filter(g => g.id !== id);
-    st.transactions.forEach(t => { if (t.goalId === id) t.goalId = undefined; });
-  });
-  /** Add to (or take from) a goal. A blank other-account means the money already sits in the goal's account. */
-  A.moveGoal = ({ goalId, amount, date, accountId, note, withdraw }) => {
-    const g = Q.goalMap().get(goalId);
-    if (!g) return { error: t('That goal no longer exists.') };
-    if (!(amount > 0)) return { error: t('Enter an amount greater than zero.') };
-    if (!U.isDate(date)) return { error: t('Enter a valid date.') };
-    if (!accountId) {
-      S.commit(st => { const x = st.goals.find(z => z.id === goalId); x.initial = (x.initial || 0) + (withdraw ? -amount : amount); });
-      return {};
-    }
-    if (accountId === g.accountId) return { error: t('Pick a different account than the goal account.') };
-    return A.addTx({
-      type: 'transfer', date, amount, goalId,
-      accountId: withdraw ? g.accountId : accountId, toAccountId: withdraw ? accountId : g.accountId,
-      payee: withdraw ? t('Withdrawal from {name}', { name: g.name }) : t('Saved for {name}', { name: g.name }), note,
-    });
-  };
-
   /* ---------- scheduled ---------- */
   A.saveRecurring = r => {
     const name = clean(r.name);
@@ -218,15 +147,13 @@ const A = (() => {
     if (!(r.amount > 0)) return { error: t('Enter an amount greater than zero.') };
     if (!U.isDate(r.startDate)) return { error: t('Enter a valid first date.') };
     if (r.endDate && (!U.isDate(r.endDate) || r.endDate < r.startDate)) return { error: t('The end date must be after the first date.') };
-    if (!Q.acc(r.accountId)) return { error: t('Choose an account.') };
-    if (r.type === 'transfer' && (!Q.acc(r.toAccountId) || r.toAccountId === r.accountId)) return { error: t('Choose two different accounts.') };
+    if (!['income', 'expense'].includes(r.type)) return { error: t('Choose a type.') };
     let id = r.id;
     S.commit(st => {
       const body = {
-        name, type: r.type, amount: Math.round(r.amount), accountId: r.accountId, toAccountId: r.type === 'transfer' ? r.toAccountId : undefined,
-        categoryId: r.type === 'transfer' ? undefined : (r.categoryId || undefined), payee: clean(r.payee) || name, note: clean(r.note),
-        goalId: r.type === 'transfer' ? (r.goalId || undefined) : undefined,
-        purpose: r.type === 'transfer' ? undefined : (clean(r.purpose).slice(0, 200) || undefined), importance: r.type === 'transfer' ? undefined : normImp(r.importance),
+        name, type: r.type, amount: Math.round(r.amount), accountId: Q.main().id,
+        categoryId: r.categoryId || undefined, payee: clean(r.payee) || name, note: clean(r.note),
+        purpose: clean(r.purpose).slice(0, 200) || undefined, importance: normImp(r.importance),
         frequency: r.frequency, startDate: r.startDate, endDate: r.endDate || undefined, autoPost: !!r.autoPost, active: r.active !== false,
       };
       if (id) {
@@ -247,8 +174,8 @@ const A = (() => {
     const idx = r.count || 0;
     if (!st.transactions.some(t => t.recurringId === r.id && t.recurringIndex === idx)) {
       st.transactions.push(build({
-        type: r.type, date, amount: amount || r.amount, accountId: r.accountId, toAccountId: r.toAccountId, categoryId: r.categoryId,
-        payee: r.payee || r.name, note: r.note, purpose: r.purpose, importance: r.importance, goalId: r.goalId, recurringId: r.id, recurringIndex: idx,
+        type: r.type, date, amount: amount || r.amount, categoryId: r.categoryId,
+        payee: r.payee || r.name, note: r.note, purpose: r.purpose, importance: r.importance, recurringId: r.id, recurringIndex: idx,
       }));
     }
     r.count = idx + 1; r.lastPosted = date;
@@ -278,23 +205,22 @@ const A = (() => {
   A.importJSON = text => {
     let obj;
     try { obj = JSON.parse(text); } catch (e) { return { error: t('That file is not valid JSON.') }; }
-    if (!obj || typeof obj !== 'object' || !Array.isArray(obj.transactions) || !Array.isArray(obj.accounts)) return { error: t('This does not look like a Ledgerly backup.') };
+    if (!obj || typeof obj !== 'object' || !Array.isArray(obj.transactions)) return { error: t('This does not look like a Ledgerly backup.') };
     S.replace(obj);
     S.state.meta.onboarded = true;
     S.persist();
-    return { accounts: S.state.accounts.length, transactions: S.state.transactions.length };
+    return { transactions: S.state.transactions.length };
   };
   A.markBackup = () => S.commit(st => { st.meta.lastBackup = U.today(); }, { silent: true });
 
   const amountText = (t, signed) => (((signed && t.type === 'expense') ? -1 : 1) * t.amount / U.currency().pow).toFixed(U.currency().digits);
   /** Transactions as CSV (opens in Excel). Includes week and month columns so a spreadsheet can total by day, week or month. */
   A.exportCsv = (list = Q.sorted()) => {
-    const accs = Q.accMap(), cats = Q.catMap(), ws = S.state.settings.weekStart;
-    const rows = [['Date', 'Week starting', 'Month', 'Type', 'Account', 'To account', 'Category', 'Payee', 'Purpose', 'Importance (1-4)', 'Note', 'Tags', 'Amount', 'Cleared']];
+    const cats = Q.catMap(), ws = S.state.settings.weekStart;
+    const rows = [['Date', 'Week starting', 'Month', 'Type', 'Category', 'Payee', 'Purpose', 'Importance (1-4)', 'Note', 'Amount']];
     for (const t of list) rows.push([
-      t.date, U.weekStart(t.date, ws), t.date.slice(0, 7), t.type, (accs.get(t.accountId) || {}).name, t.type === 'transfer' ? (accs.get(t.toAccountId) || {}).name : '',
-      t.type === 'transfer' ? '' : Q.catName(cats.get(t.categoryId)), t.payee, t.purpose || '', t.importance || '', t.note, (t.tags || []).join(' '),
-      amountText(t, true), t.cleared ? 'yes' : 'no',
+      t.date, U.weekStart(t.date, ws), t.date.slice(0, 7), t.type, Q.catName(cats.get(t.categoryId)), t.payee, t.purpose || '', t.importance || '', t.note,
+      amountText(t, true),
     ]);
     return U.csv(rows);
   };
@@ -318,7 +244,6 @@ const A = (() => {
       date: find('date', 'posted', 'التاريخ', 'تاريخ'), amount: find('amount', 'value', 'المبلغ', 'مبلغ'), debit: find('debit', 'withdraw', 'مدين', 'سحب'), credit: find('credit', 'deposit', 'دائن', 'إيداع', 'ايداع'),
       payee: find('payee', 'description', 'merchant', 'details', 'الوصف', 'الجهة', 'البيان'), cat: find('category', 'الفئة', 'التصنيف', 'الصنف'),
       type: exact('type', 'النوع'), note: find('note', 'memo', 'ملاحظة', 'ملاحظات'), purpose: find('purpose', 'الغرض', 'السبب'), imp: find('importance', 'الأهمية', 'الاهمية'),
-      acc: exact('account', 'الحساب', 'from account', 'من حساب'), to: exact('to account', 'إلى حساب', 'الى حساب'), tags: exact('tags', 'الوسوم'), cleared: exact('cleared'),
     };
     if (ix.payee < 0) ix.payee = find('name', 'الاسم');
     if (ix.date < 0 || (ix.amount < 0 && ix.debit < 0 && ix.credit < 0)) return { error: t('Could not find Date and Amount columns. The first row should contain headers like Date, Description, Amount.') };
@@ -339,7 +264,7 @@ const A = (() => {
       v = clean(v).toLowerCase();
       if (/^(inc|in$|دخل|إيراد|ايراد|وارد)/.test(v)) return 'income';
       if (/^(exp|out$|مصروف|مصاريف|صرف|نفق)/.test(v)) return 'expense';
-      if (/^(tra|تحويل)/.test(v)) return 'transfer';
+      if (/^(tra|تحويل)/.test(v)) return 'transfer';   // old exports: recognised so the row can be skipped
       return null;
     };
     const cell = (r, i) => (i >= 0 ? clean(r[i]) : '');
@@ -357,37 +282,22 @@ const A = (() => {
       const imp = Math.round(+cell(r, ix.imp));
       rows.push({
         date, type, amount: Math.abs(amt), payee: cell(r, ix.payee), note: ix.note >= 0 && ix.note !== ix.payee ? cell(r, ix.note) : '',
-        categoryName: type === 'transfer' ? '' : cell(r, ix.cat), purpose: cell(r, ix.purpose), importance: imp >= 1 && imp <= 4 ? imp : undefined,
-        accountName: cell(r, ix.acc), toAccountName: cell(r, ix.to), tags: cell(r, ix.tags), cleared: /^(yes|y|true|1|نعم)$/i.test(cell(r, ix.cleared)),
+        categoryName: cell(r, ix.cat), purpose: cell(r, ix.purpose), importance: imp >= 1 && imp <= 4 ? imp : undefined,
       });
     });
-    const bad = rows.filter(r => r.type === 'transfer' && !r.toAccountName).length;
-    return { rows: rows.filter(r => r.type !== 'transfer' || r.toAccountName), errors: bad ? [...errors, t('{n} transfers without a “To account” were skipped.', { n: bad })] : errors };
+    const skipped = rows.filter(r => r.type === 'transfer').length;
+    return { rows: rows.filter(r => r.type !== 'transfer'), errors: skipped ? [...errors, t('{n} transfers were skipped. Ledgerly only keeps income and expenses.', { n: skipped })] : errors };
   };
-  /** Add parsed rows. Accounts named in the file are used (and created if new); other rows go to accountId. Categories are matched or created. */
-  A.importRows = (rows, accountId) => {
-    if (!Q.acc(accountId)) return { error: t('Choose the account these rows belong to.') };
-    const accByName = new Map(S.state.accounts.map(a => [a.name.toLowerCase(), a.id]));
-    let newAccounts = 0;
-    const accountFor = name => {
-      const n = clean(name);
-      if (!n) return accountId;
-      const hit = accByName.get(n.toLowerCase());
-      if (hit) return hit;
-      const r = A.saveAccount({ name: n, type: /cash|نقد|كاش/i.test(n) ? 'cash' : /sav|توفير|ادخار/i.test(n) ? 'savings' : 'checking', opening: 0 });
-      if (r.error) return accountId;
-      accByName.set(n.toLowerCase(), r.id); newAccounts++;
-      return r.id;
-    };
-    const sigOf = x => `${x.date}|${x.type}|${x.amount}|${x.accountId}|${(x.payee || '').toLowerCase()}`;
+  /** Add parsed rows. Categories are matched or created; rows already in the ledger are skipped. */
+  A.importRows = rows => {
+    const sigOf = x => `${x.date}|${x.type}|${x.amount}|${(x.payee || '').toLowerCase()}`;
     const have = new Set(S.state.transactions.map(sigOf));
-    const ready = rows.map(r => ({ ...r, accountId: accountFor(r.accountName), toAccountId: r.type === 'transfer' ? accountFor(r.toAccountName) : undefined }));
     const before = S.state.categories.length;
-    for (const r of ready) if (r.type !== 'transfer' && r.categoryName) r.categoryId = A.ensureCategory(r.type, r.categoryName, r.importance);
+    const ready = rows.map(r => ({ ...r }));
+    for (const r of ready) if (r.categoryName) r.categoryId = A.ensureCategory(r.type, r.categoryName, r.importance);
     let added = 0, skipped = 0;
     S.commit(st => {
       for (const r of ready) {
-        if (r.type === 'transfer' && r.toAccountId === r.accountId) { skipped++; continue; }
         const sig = sigOf(r);
         if (have.has(sig)) { skipped++; continue; }
         have.add(sig);
@@ -395,7 +305,7 @@ const A = (() => {
         added++;
       }
     });
-    return { added, skipped, newAccounts, newCategories: S.state.categories.length - before };
+    return { added, skipped, newCategories: S.state.categories.length - before };
   };
 
   return A;

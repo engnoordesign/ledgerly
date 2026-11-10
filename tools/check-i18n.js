@@ -22,7 +22,7 @@ const ctx = { localStorage: { getItem() { return null; } }, navigator: { languag
 vm.createContext(ctx);
 for (const f of ['util.js', 'i18n.js', 'store.js']) vm.runInContext(fs.readFileSync(path.join(root, 'js', f), 'utf8'), ctx);
 const dyn = JSON.parse(vm.runInContext(`JSON.stringify([
-  ...Object.values(K.ACCOUNT_TYPES).map(v => v.label), ...Object.values(K.FREQ), ...Object.values(K.BUCKETS), ...U.CURRENCIES.map(c => c[1])])`, ctx));
+  ...Object.values(K.FREQ), ...Object.values(K.BUCKETS), ...U.CURRENCIES.map(c => c[1])])`, ctx));
 dyn.forEach(s => used.has(s) || used.set(s, 'dynamic'));
 // built-in category names are translated on display
 const seed = fs.readFileSync(path.join(root, 'js', 'seed.js'), 'utf8');

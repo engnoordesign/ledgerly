@@ -2,9 +2,10 @@
 
 # Ledgerly
 
-A private budget and accounting app in English and Arabic (right-to-left). Track income, spending and
-savings, plan with ready-made budgets worked out from your own numbers, and see daily, weekly,
-monthly and yearly statistics.
+A private budget and accounting app in English and Arabic (right-to-left). It is deliberately simple: **one balance,
+only income and expenses**. Type what you earned or spent, plan with ready-made budgets worked out from your own
+numbers, and see daily, weekly, monthly and yearly statistics. There are no account types, no transfers and no
+account to pick; it works the same on a phone, a tablet and a computer.
 
 ## Use it online (Cloudflare Workers)
 
@@ -112,24 +113,23 @@ account's encrypted data and the server secret.
 
 | Area | Highlights |
 | --- | --- |
-| Home | Income, expenses, net saved, budget left; today / this week / this month totals; cash flow by Day / Week / Month / Year; spending donut; recent activity. Net worth, insights, health score, upcoming bills, goals and averages are one tap away under *More* |
-| Transactions | Income, expense and transfer ledger grouped **daily, weekly or monthly** with income / expenses / net per group, sorted newest, oldest or largest first; categories are **typed freely** (existing ones are suggested, new names become categories); a four-level importance and a free-text purpose on every income and expense; search; filters; bulk edit; payee autofill; repeat as scheduled |
-| Print statement (PDF) | A tidy, black-on-white **statement of income and expenses** for a **day, week, month, year or any dates you choose**: totals, opening and closing balance, a day / week / month breakdown, category totals, account balances and every transaction with what it was for. Preview it, pick A4 or Letter, then *Print or save as PDF*. Works in English and Arabic (right-to-left). Open it from **Statistics → Print statement** or from **Import & Export** |
+| Home | Balance, income, expenses, net saved; today / this week / this month totals; cash flow by Day / Week / Month / Year; spending donut; recent activity. Balance, budget, insights, health score, upcoming bills and averages are one tap away under *More* |
+| Transactions | Income and expense ledger grouped **daily, weekly or monthly** with income / expenses / net per group, sorted newest, oldest or largest first; categories are **typed freely** (existing ones are suggested, new names become categories); a four-level importance and a free-text purpose on every income and expense; search; period and filters; payee autofill; repeat as scheduled; on a phone the list comes first and the extra filters sit behind one button |
+| Print statement (PDF) | A tidy, black-on-white **statement of income and expenses** for a **day, week, month, year or any dates you choose**: totals, opening and closing balance, a day / week / month breakdown, category totals and every transaction with what it was for. Preview it, pick A4 or Letter, then *Print or save as PDF*. Works in English and Arabic (right-to-left). Open it from **Statistics → Print statement** or from **Import & Export** |
 | Import & Export | One page for everything: transactions as Excel-friendly CSV (with week and month columns), totals per day / week / month, the printable statement, full JSON backup; import CSV from Ledgerly, Excel or a bank (English or Arabic headers, new categories and accounts created, duplicates skipped) and restore backups |
 | Budget | Zero-based plan ("left to budget" must reach zero), Needs / Wants / Savings split, inline editing, carry-forward plans per month |
 | Plans | Smart plan built from your habits plus 50/30/20, 60/20/20, 60/30/10, 50/20/30, 45/15/40, all converted into amounts from your income, with preview before applying |
 | Statistics | Day, week, month, year or custom range; comparison with the previous period; drill-down chart; income statement; category and source breakdown; spending and income by importance; highlights |
-| Goals | Progress, needed-per-month, pace and ETA, deposits and withdrawals as transfers |
-| Accounts | Checking, cash, savings, investment, credit card, loan; balances, 6-month trend, statement reconciliation |
 | Scheduled | Salary, rent, subscriptions; auto-post or confirm each time; 30-day outlook |
 | Settings | Language, light / dark / auto theme, 36 currencies, number format, week start, savings target, categories, backup and restore |
 
 ## Accounting rules
 
 * Money is stored as integer minor units (cents), never floats.
-* Balance = opening balance + income − expenses ± transfers (entries dated today or earlier).
-* A transfer is never income or expense. "Saved" means transfers into savings or investment accounts.
-* Net worth = sum of all account balances; credit cards and loans carry negative balances.
+* There is one account. Balance = starting balance + income − expenses (entries dated today or earlier).
+* Older data is folded into this shape the first time it opens: several accounts become one (their starting balances add up,
+  so the balance does not change), transfers and savings goals are taken out, and what was taken out is kept under `meta.legacy`
+  in your data so nothing is lost. Old CSV files with transfer rows import their income and expenses and skip the transfers.
 * Budgets are per month. A month without its own plan inherits the most recent earlier one, so history is never rewritten.
 * A month in progress is compared with the same point in the previous month, not with a finished month.
 * Changing the currency changes display only. Amounts are not converted.
@@ -157,7 +157,7 @@ js/auth.js            profiles, lock screen, encrypted storage, idle lock
 js/sync.js            talks to the server: push, pull, conflicts, sign-in from another device
 js/merge.js           merging two copies of a profile
 js/store.js           state, persistence, settings
-js/engine.js          read-only accounting selectors (balances, budgets, goals, statistics, plans, insights)
+js/engine.js          read-only accounting selectors (balance, budgets, statistics, statements, plans, insights)
 js/actions.js         validated mutations (return undo data), recurring posting, CSV import
 js/seed.js            default categories and the sample-data year
 js/charts.js, ui.js   charts and shared UI kit

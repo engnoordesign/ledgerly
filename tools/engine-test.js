@@ -48,17 +48,20 @@ eq(run(`U.diffMonths('2026-01', '2026-10')`), 9, 'diffMonths');
 /* ---- demo year ---- */
 run(`S.state = Seed.demo({ lang: 'en', currency: 'USD', locale: 'en-US', savingsTarget: 20, emergencyMonths: 6, weekStart: 1, theme: 'system', name: '' }); S.version++; S.applySettings();`);
 const n = run(`S.state.transactions.length`);
-ok(n > 400, `demo has plenty of transactions (${n})`);
+ok(n > 350, `demo has plenty of transactions (${n})`);
+eq(run(`S.state.accounts.length`), 1, 'the demo has exactly one account');
+eq(run(`S.state.transactions.every(x => x.type === 'income' || x.type === 'expense')`), true, 'the demo has only income and expenses');
+eq(run(`S.state.transactions.every(x => x.accountId === S.state.accounts[0].id)`), true, 'every entry belongs to the one account');
 eq(run(`S.state.transactions.every(x => Number.isInteger(x.amount) && x.amount > 0)`), true, 'all amounts positive integers');
 eq(run(`S.state.transactions.filter(x => x.date > U.today()).length`), 0, 'no future transactions');
 eq(run(`new Set(S.state.transactions.map(x => x.id)).size`), n, 'ids unique');
 
-// accounting identity: net worth == sum of openings + income - expenses
-const nw = run(`Q.netWorth().net`);
+// accounting identity: balance == opening + income - expenses
+const nw = run(`Q.balance()`);
 const ident = run(`U.sum(S.state.accounts, a => a.opening) + U.sum(S.state.transactions.filter(x => x.type==='income'), x => x.amount) - U.sum(S.state.transactions.filter(x => x.type==='expense'), x => x.amount)`);
-eq(nw, ident, 'net worth equals openings + income - expenses (transfers net to zero)');
-eq(run(`U.sum([...Q.balances().values()])`), nw, 'sum of balances equals net worth');
-eq(run(`Q.netWorthSeries(12)[11].value`), nw, 'net-worth series ends at current net worth');
+eq(nw, ident, 'the balance equals the opening balance + income - expenses');
+eq(run(`U.sum([...Q.balances().values()])`), nw, 'the balances add up to the balance');
+eq(run(`Q.balanceSeries(12)[11].value`), nw, 'the balance series ends at the current balance');
 
 // month aggregates reconcile with raw data
 const cm = run(`U.curMonth()`);
@@ -80,11 +83,6 @@ const br = run(`JSON.parse(JSON.stringify((() => { const b = Q.budgetRows(U.curM
 ok(br.has, 'budget plan carries forward to current month');
 eq(br.un, 0, 'demo plan is fully assigned (zero-based)');
 ok(br.t.actualExpense > 0, 'current month has spending');
-
-// goals
-const gi = run(`JSON.parse(JSON.stringify(S.state.goals.map(g => Q.goalInfo(g))))`);
-ok(gi[0].saved > gi[0].target * 0.4, 'emergency fund progress counts initial + contributions');
-ok(gi.some(g => g.status === 'behind'), 'a goal is flagged behind');
 
 // plans
 const income = run(`Q.planIncome().amount`);
@@ -120,12 +118,12 @@ ok(run(`Q.insights(U.curMonth()).length`) >= 1, 'insights produced');
 // filtering
 const q1 = run(`Q.filter({ q: 'netflix' }).length`);
 ok(q1 >= 10, 'search finds recurring netflix payments');
-ok(run(`Q.filter({ type: 'transfer' }).every(x => x.type === 'transfer')`), 'type filter');
+ok(run(`Q.filter({ type: 'income' }).length`) > 0 && run(`Q.filter({ type: 'income' }).every(x => x.type === 'income')`), 'type filter');
 
 // actions validation
 ok(run(`A.addTx({type:'expense', amount: 0, date:'2026-01-01', accountId:'a_chk'}).error`), 'rejects zero amount');
-ok(run(`A.addTx({type:'transfer', amount: 100, date:'2026-01-01', accountId:'a_chk', toAccountId:'a_chk'}).error`), 'rejects same-account transfer');
-eq(run(`A.deleteAccount('a_chk').error !== undefined`), true, 'cannot delete account with history');
+ok(run(`A.addTx({type:'transfer', amount: 100, date:'2026-01-01'}).error`), 'transfers are not a thing any more: rejected');
+ok(run(`A.addTx({type:'income', amount: 100, date:'nope'}).error`), 'rejects a bad date');
 
 // bank csv import
 const csv = 'Date,Description,Amount\n2026-10-01,Coffee Shop,-4.50\n10/02/2026,Paycheck,"1,200.00"\nbad,Oops,5\n';
@@ -138,19 +136,16 @@ eq(parsed.rows[1].amount, 120000, 'csv amount with thousands separator');
 /* ---- purpose and importance ---- */
 ok(run(`S.state.transactions.filter(x => x.importance).length`) > 400, 'demo entries carry an importance');
 ok(run(`S.state.transactions.filter(x => x.purpose).length`) > 200, 'demo entries carry a purpose');
-eq(run(`S.state.transactions.filter(x => x.type === 'transfer').every(x => x.importance === undefined && x.purpose === undefined)`), true, 'transfers never carry importance or purpose');
 const cmk = run(`U.curMonth()`);
 eq(run(`U.sum([...Q.month('${cmk}').impExp.values()])`), run(`Q.month('${cmk}').expense`), 'expense by importance sums to total expense');
 eq(run(`U.sum([...Q.month('${cmk}').impInc.values()])`), run(`Q.month('${cmk}').income`), 'income by importance sums to total income');
-ok(run(`Q.filter({ importance: '4', type: 'expense' }).length`) > 50 && run(`Q.filter({ importance: '4' }).every(x => x.importance === 4 && x.type !== 'transfer')`), 'the importance filter returns only that level');
+ok(run(`Q.filter({ importance: '4', type: 'expense' }).length`) > 50 && run(`Q.filter({ importance: '4' }).every(x => x.importance === 4)`), 'the importance filter returns only that level');
 eq(run(`Q.filter({ importance: 'none' }).every(x => !x.importance)`), true, 'the "not set" filter works');
 run(`A.addTx({ type: 'expense', amount: 1000, date: U.today(), accountId: 'a_chk', categoryId: 'c_dining', payee: 'ImpTest', purpose: '  Birthday dinner for Mum  ', importance: '3' })`);
 const imp1 = run(`S.state.transactions.find(x => x.payee === 'ImpTest')`);
 eq(String([imp1.purpose, imp1.importance]), 'Birthday dinner for Mum,3', 'purpose is trimmed and importance is stored as a number');
 run(`A.addTx({ type: 'expense', amount: 1000, date: U.today(), accountId: 'a_chk', payee: 'ImpBad', importance: 9 })`);
 eq(run(`S.state.transactions.find(x => x.payee === 'ImpBad').importance`), undefined, 'an out-of-range importance is dropped');
-run(`A.addTx({ type: 'transfer', amount: 1000, date: U.today(), accountId: 'a_chk', toAccountId: 'a_sav', purpose: 'x', importance: 4 })`);
-eq(run(`S.state.transactions.filter(x => x.type === 'transfer').sort((a, b) => b.createdAt - a.createdAt)[0].importance`), undefined, 'a transfer ignores importance');
 eq(run(`Q.filter({ q: 'birthday dinner' }).length`), 1, 'search finds text typed in the purpose');
 ok(run(`Q.filter({ q: 'nice to have' }).length`) > 10, 'search finds entries by their importance word');
 ok(/Birthday dinner for Mum/.test(run(`A.exportCsv(Q.filter({ q: 'ImpTest' }))`)) && /Importance \(1-4\)/.test(run(`A.exportCsv([])`)), 'CSV export includes purpose and importance');
@@ -231,9 +226,9 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
   const want = run(`Q.filter({ from: U.addDays(U.today(), -40), to: U.today() }).length`);
   eq(parsed.rows.length, want, 'every exported row parses back');
   eq(parsed.errors.length, 0, 'no parse errors on our own export');
-  ok(parsed.rows.some(x => x.type === 'transfer' && x.toAccountName), 'transfers keep their "to" account');
+  ok(!/Account|Cleared/.test(head), 'the export has no account or cleared columns');
   ok(parsed.rows.some(x => x.importance && x.purpose !== undefined), 'importance comes back');
-  const again = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(parsed.rows)}, 'a_chk'))`));
+  const again = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(parsed.rows)}))`));
   eq(again.added, 0, 'importing our own export again adds nothing (duplicates skipped)');
   const ar = 'التاريخ,النوع,الفئة,الوصف,المبلغ,الأهمية\r\n2026-03-05,مصروف,مولدة,اشتراك المولدة,25000,4\r\n05/03/2026,دخل,راتب,راتب آذار,900000,4\r\n2026-03-06,مصروف,نقل جديد,تكسي,-7000,';
   const pa = JSON.parse(run(`JSON.stringify(A.parseBankCsv(${JSON.stringify(ar)}, { dateOrder: 'dmy' }))`));
@@ -242,10 +237,59 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
   eq(pa.rows[2].amount, 700000, 'the sign is dropped when the type column says expense');
   run(`S.state.settings.lang = 'ar'; S.applySettings();`);
   const n0 = run(`S.state.categories.length`);
-  const ia = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(pa.rows)}, 'a_chk'))`));
+  const ia = JSON.parse(run(`JSON.stringify(A.importRows(${JSON.stringify(pa.rows)}))`));
   ok(ia.added === 3 && ia.newCategories === 2 && run(`S.state.categories.length`) === n0 + 2, 'importing creates new categories and matches existing ones (راتب is the built-in Salary)');
   eq(run(`S.state.transactions.find(x => x.purpose === undefined && x.payee === 'راتب آذار').categoryId`), 'c_salary', 'the imported salary row lands in Salary');
   run(`S.state.settings.lang = 'en'; S.applySettings();`);
+}
+
+/* ---- one account, income and expenses only: older data is folded in ---- */
+{
+  const legacy = JSON.stringify({
+    settings: { currency: 'USD' }, categories: [{ id: 'c1', name: 'Food', type: 'expense' }],
+    accounts: [{ id: 'a_z', name: 'Cash', type: 'cash', opening: 5000 }, { id: 'a_b', name: 'Bank', type: 'checking', opening: 20000 }, { id: 'a_c', name: 'Card', type: 'credit', opening: -3000, archived: true }],
+    transactions: [
+      { id: 't1', type: 'income', date: '2026-01-05', amount: 100000, accountId: 'a_b' },
+      { id: 't2', type: 'expense', date: '2026-01-06', amount: 2500, accountId: 'a_c', categoryId: 'c1' },
+      { id: 't3', type: 'transfer', date: '2026-01-07', amount: 7000, accountId: 'a_b', toAccountId: 'a_z' },
+      { id: 't4', type: 'transfer', date: '2026-01-08', amount: 1000, accountId: 'a_b', toAccountId: 'a_c', goalId: 'g1' },
+      { id: 't5', type: 'expense', date: '2026-01-09', amount: 1200, accountId: 'a_z' },
+    ],
+    goals: [{ id: 'g1', name: 'Laptop', target: 100000, accountId: 'a_b' }],
+    recurring: [{ id: 'r1', name: 'Rent', type: 'expense', amount: 5000, accountId: 'a_b', frequency: 'monthly', startDate: '2026-01-01' },
+      { id: 'r2', name: 'Savings', type: 'transfer', amount: 500, accountId: 'a_b', toAccountId: 'a_z', frequency: 'monthly', startDate: '2026-01-01' }],
+    budgets: {}, meta: { onboarded: true },
+  });
+  const before = 5000 + 20000 - 3000 + 100000 - 2500 - 1200;   // what the person had: openings + income - expenses (transfers only moved money around)
+  const m = JSON.parse(run(`(() => { const st = S.normalize(JSON.parse(${JSON.stringify(legacy)})), keep = S.state; S.state = st; S.version++;
+    const out = { n: st.accounts.length, opening: st.accounts[0].opening, main: st.accounts[0].id, noType: st.accounts[0].type === undefined && !st.accounts[0].archived,
+      types: [...new Set(st.transactions.map(x => x.type))].sort().join(), allMain: st.transactions.every(x => x.accountId === st.accounts[0].id && x.toAccountId === undefined && x.goalId === undefined),
+      count: st.transactions.length, balance: Q.balance('2026-12-31'), hasGoals: 'goals' in st,
+      rec: st.recurring.map(r => r.id).join(), recMain: st.recurring.every(r => r.accountId === st.accounts[0].id),
+      legacy: st.meta.legacy ? { accounts: st.meta.legacy.accounts.map(a => a.id).sort().join(), transfers: st.meta.legacy.transfers.map(x => x.id).sort().join(), recurring: st.meta.legacy.recurring.length, goals: st.meta.legacy.goals.length } : null,
+      again: JSON.stringify(S.normalize(JSON.parse(JSON.stringify(st)))) === JSON.stringify(st),
+      reordered: S.normalize(Object.assign(JSON.parse(${JSON.stringify(legacy)}), { accounts: JSON.parse(${JSON.stringify(legacy)}).accounts.reverse() })).accounts[0].id };
+    S.state = keep; S.version++; return JSON.stringify(out); })()`));
+  eq(m.n, 1, 'older data with three accounts becomes one account');
+  eq(m.main, 'a_b', 'the account that stays does not depend on the order they were stored in');
+  eq(m.reordered, 'a_b', 'storing the accounts in another order gives the same result');
+  eq(m.opening, 22000, 'every account\'s opening money is carried into the one account');
+  ok(m.noType, 'the account has no type any more');
+  eq(m.types, 'expense,income', 'transfers are taken out');
+  ok(m.allMain, 'every entry points at the one account, with no transfer or goal fields left');
+  eq(m.count, 3, 'the income and expenses are all kept');
+  eq(m.balance, before, 'the balance is exactly what it was before');
+  eq(m.hasGoals, false, 'goals are no longer part of the data');
+  eq(m.rec, 'r1', 'scheduled transfers are taken out, scheduled bills stay');
+  ok(m.recMain, 'scheduled items point at the one account');
+  ok(m.legacy && m.legacy.accounts === 'a_b,a_c,a_z'.split(',').filter(x => x !== 'a_b').join() && m.legacy.transfers === 't3,t4' && m.legacy.recurring === 1 && m.legacy.goals === 1, 'what was taken out is kept under meta.legacy');
+  ok(m.again, 'folding already-folded data changes nothing');
+  eq(run(`S.normalize({}).accounts.length`), 1, 'an empty profile still has the one account');
+  eq(run(`Seed.fresh({}, { opening: 12300 }).accounts[0].opening`), 12300, 'a new profile starts from the balance the person typed');
+  // CSV rows of the old kind: transfers are skipped and counted
+  const oldCsv = 'Date,Type,Account,To account,Category,Amount\n2026-02-01,expense,Cash,,Food,-5\n2026-02-02,transfer,Bank,Cash,,50\n2026-02-03,income,Bank,,Salary,900\n';
+  const po = JSON.parse(run(`JSON.stringify(A.parseBankCsv(${JSON.stringify(oldCsv)}))`));
+  ok(po.rows.length === 2 && po.rows.every(r => r.type !== 'transfer') && po.errors.length === 1, 'an old export imports its income and expenses and skips its transfers');
 }
 
 /* ---- printable statement ---- */
@@ -271,11 +315,8 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
       r.rowCount = !d.rows.length || U.sum(d.rows, x => x.count) === d.incomeCount + d.expenseCount;
       r.catsSum = U.sum(d.incomeCats, x => x.value) === d.income && U.sum(d.expenseCats, x => x.value) === d.expense;
       r.pct = !d.expense || Math.abs(U.sum(d.expenseCats, x => x.pct) - 1) < 1e-9;
-      r.accReconcile = d.accounts.every(a => a.opening + a.in - a.out === a.closing);
-      r.accNet = U.sum(d.accounts, a => a.in) - U.sum(d.accounts, a => a.out) === d.income - d.expense;
-      r.accOpen = U.sum(d.accounts, a => a.opening) === d.opening && U.sum(d.accounts, a => a.closing) === d.closing;
       r.items = d.items.every((x, i) => x.date >= from && x.date <= to && (!i || d.items[i - 1].date <= x.date));
-      r.counts = d.incomeCount + d.expenseCount + d.transferCount === d.items.length;
+      r.counts = d.incomeCount + d.expenseCount === d.items.length;
       r.sameAsRange = d.income === Q.range(from, to).income && d.expense === Q.range(from, to).expense;
       r.n = d.items.length; r.income = d.income; r.days = d.days; r.rows = d.rows.length;
       out.push(r);
@@ -287,7 +328,6 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
     ok(r.net && r.sameAsRange, `${r.name}: totals match the statistics engine`);
     ok(r.rowsSum && r.rowsCover && r.rowCount, `${r.name}: the day/week/month rows cover the period exactly and add up to the totals`);
     ok(r.catsSum && r.pct, `${r.name}: category totals add up to the income and expense totals`);
-    ok(r.accReconcile && r.accNet && r.accOpen, `${r.name}: each account reconciles and the accounts add up to the whole`);
     ok(r.items && r.counts, `${r.name}: transactions are inside the period, oldest first, and counted once`);
   }
   const by = Object.fromEntries(checks.map(r => [r.name, r]));

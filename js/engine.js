@@ -1,10 +1,8 @@
 'use strict';
 /* Accounting engine: read-only selectors over S.state, memoised per state version.
    Conventions
-   - Account balance = opening + income - expense +/- transfers (only transactions dated <= today count).
-   - A transfer moves money between two accounts and is NEVER income or expense.
-   - "Saved" = transfers INTO a savings/investment account from a non-savings account (minus withdrawals).
-   - Net worth = sum of all account balances (credit cards / loans carry negative balances). */
+   - There is one account. Balance = opening + income - expense (only transactions dated <= today count).
+   - "Kept" for a period = income - expense. */
 const Q = (() => {
   const Q = {};
   const memo = new Map(); let mv = -1;
@@ -16,24 +14,17 @@ const Q = (() => {
   Q.cached = cached;
 
   /* ---------- lookups ---------- */
-  Q.accMap = () => cached('accMap', () => new Map(S.state.accounts.map(a => [a.id, a])));
   Q.catMap = () => cached('catMap', () => new Map(S.state.categories.map(c => [c.id, c])));
-  Q.acc = id => Q.accMap().get(id);
+  /** The one account every transaction belongs to. */
+  Q.main = () => (S.state && S.state.accounts[0]) || { id: 'a_main' };
   Q.cat = id => Q.catMap().get(id);
-  Q.accounts = (all = false) => S.state.accounts.filter(a => all || !a.archived);
   Q.cats = (type, all = false) => S.state.categories.filter(c => (all || !c.archived) && (!type || c.type === type));
-  Q.accType = a => K.ACCOUNT_TYPES[a && a.type] || K.ACCOUNT_TYPES.checking;
-  Q.isSaving = id => !!Q.accType(Q.acc(id)).saving;
-  Q.isLiability = a => !!Q.accType(a).liability;
-  Q.goalMap = () => cached('goalMap', () => new Map(S.state.goals.map(g => [g.id, g])));
 
   Q.sorted = () => cached('sorted', () => S.state.transactions.slice().sort((a, b) =>
     a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0)));
 
   /** [accountId, signedDelta] pairs for a transaction. */
-  Q.legs = t => t.type === 'income' ? [[t.accountId, t.amount]]
-    : t.type === 'expense' ? [[t.accountId, -t.amount]]
-    : [[t.accountId, -t.amount], [t.toAccountId, t.amount]];
+  Q.legs = t => [[t.accountId, t.type === 'income' ? t.amount : -t.amount]];
 
   /* ---------- balances ---------- */
   Q.balances = (asOf = U.today()) => cached('bal:' + asOf, () => {
@@ -44,24 +35,9 @@ const Q = (() => {
     }
     return m;
   });
-  Q.balance = id => Q.balances().get(id) || 0;
-  Q.clearedBalance = id => cached('cb:' + id, () => {
-    const a = Q.acc(id); let v = a ? (a.opening || 0) : 0;
-    for (const t of S.state.transactions) {
-      if (!t.cleared) continue;
-      for (const [aid, d] of Q.legs(t)) if (aid === id) v += d;
-    }
-    return v;
-  });
-  Q.netWorth = () => cached('nw', () => {
-    const bal = Q.balances(); let assets = 0, liabilities = 0;
-    for (const a of S.state.accounts) {
-      const b = bal.get(a.id) || 0;
-      if (Q.isLiability(a)) liabilities += -b; else assets += b;
-    }
-    return { assets, liabilities, net: assets - liabilities };
-  });
-  /** Balance at the end of each of the last n months (index n-1 = today) for every account. */
+  /** What the person has right now (or on a given day). */
+  Q.balance = (asOf = U.today()) => U.sum([...Q.balances(asOf).values()]);
+  /** Balance at the end of each of the last n months (index n-1 = today). */
   Q.balanceHistory = (n = 6) => cached('bh:' + n, () => {
     const endKey = U.curMonth(), startKey = U.addMonthKey(endKey, -(n - 1)), startDate = U.monthStart(startKey), today = U.today();
     const base = new Map(), delta = new Map();
@@ -78,7 +54,7 @@ const Q = (() => {
     for (const [id, arr] of delta) { let run = base.get(id); out.set(id, arr.map(d => (run += d))); }
     return out;
   });
-  Q.netWorthSeries = (n = 12) => cached('nws:' + n, () => {
+  Q.balanceSeries = (n = 12) => cached('bs:' + n, () => {
     const h = Q.balanceHistory(n), endKey = U.curMonth();
     return Array.from({ length: n }, (_, i) => ({
       key: U.addMonthKey(endKey, -(n - 1 - i)),
@@ -87,36 +63,31 @@ const Q = (() => {
   });
 
   /* ---------- aggregation ---------- */
-  const emptyAgg = key => ({ key, income: 0, expense: 0, saved: 0, count: 0, exp: new Map(), inc: new Map(), impExp: new Map(), impInc: new Map() });
-  const addTo = (g, t, accs) => {
+  const emptyAgg = key => ({ key, income: 0, expense: 0, count: 0, exp: new Map(), inc: new Map(), impExp: new Map(), impInc: new Map() });
+  const addTo = (g, t) => {
     g.count++;
     const im = t.importance || 0;   // 0 = not set
     if (t.type === 'income') { g.income += t.amount; const c = t.categoryId || '_none'; g.inc.set(c, (g.inc.get(c) || 0) + t.amount); g.impInc.set(im, (g.impInc.get(im) || 0) + t.amount); }
     else if (t.type === 'expense') { g.expense += t.amount; const c = t.categoryId || '_none'; g.exp.set(c, (g.exp.get(c) || 0) + t.amount); g.impExp.set(im, (g.impExp.get(im) || 0) + t.amount); }
-    else {
-      const f = accs.get(t.accountId), to = accs.get(t.toAccountId);
-      const fs = f && Q.accType(f).saving, ts = to && Q.accType(to).saving;
-      if (ts && !fs) g.saved += t.amount; else if (fs && !ts) g.saved -= t.amount;
-    }
   };
   Q.monthAgg = () => cached('monthAgg', () => {
-    const m = new Map(), accs = Q.accMap();
+    const m = new Map();
     for (const t of S.state.transactions) {
       const k = t.date.slice(0, 7);
-      addTo(m.get(k) || m.set(k, emptyAgg(k)).get(k), t, accs);
+      addTo(m.get(k) || m.set(k, emptyAgg(k)).get(k), t);
     }
     return m;
   });
   Q.month = k => Q.monthAgg().get(k) || emptyAgg(k);
   /** Aggregate for an arbitrary inclusive date range. */
   Q.range = (from, to) => cached(`r:${from}:${to}`, () => {
-    const g = emptyAgg(from + '..' + to), accs = Q.accMap();
-    for (const t of S.state.transactions) if (t.date >= from && t.date <= to) addTo(g, t, accs);
+    const g = emptyAgg(from + '..' + to);
+    for (const t of S.state.transactions) if (t.date >= from && t.date <= to) addTo(g, t);
     return g;
   });
   Q.series = (endKey, n) => Array.from({ length: n }, (_, i) => {
     const k = U.addMonthKey(endKey, -(n - 1 - i)), a = Q.month(k);
-    return { key: k, income: a.income, expense: a.expense, net: a.income - a.expense, saved: a.saved };
+    return { key: k, income: a.income, expense: a.expense, net: a.income - a.expense };
   });
   /** First and last month that have any data. */
   Q.span = () => cached('span', () => {
@@ -136,18 +107,15 @@ const Q = (() => {
   /* ---------- transactions query ---------- */
   Q.filter = (o = {}) => {
     const q = (o.q || '').trim().toLowerCase();
-    const accs = Q.accMap(), cats = Q.catMap();
+    const cats = Q.catMap();
     return Q.sorted().filter(t => {
       if (o.from && t.date < o.from) return false;
       if (o.to && t.date > o.to) return false;
       if (o.type && t.type !== o.type) return false;
-      if (o.accountId && t.accountId !== o.accountId && t.toAccountId !== o.accountId) return false;
       if (o.categoryId && (o.categoryId === '_none' ? t.categoryId : t.categoryId !== o.categoryId)) return false;
-      if (o.goalId && t.goalId !== o.goalId) return false;
-      if (o.importance) { if (t.type === 'transfer' || (t.importance || 0) !== (o.importance === 'none' ? 0 : +o.importance)) return false; }
-      if (o.uncleared && t.cleared) return false;
+      if (o.importance && (t.importance || 0) !== (o.importance === 'none' ? 0 : +o.importance)) return false;
       if (q) {
-        const hay = [t.payee, t.note, t.purpose, Q.importanceLabel(t.type, t.importance), (t.tags || []).join(' '), (cats.get(t.categoryId) || {}).name, (accs.get(t.accountId) || {}).name,
+        const hay = [t.payee, t.note, t.purpose, Q.importanceLabel(t.type, t.importance), (t.tags || []).join(' '), (cats.get(t.categoryId) || {}).name,
           U.toInput(t.amount), U.money(t.amount, { plain: true })].join(' ').toLowerCase();
         if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
       }
@@ -159,7 +127,7 @@ const Q = (() => {
     for (const t of Q.sorted()) {
       if (!t.payee) continue;
       const k = t.payee.toLowerCase(), e = m.get(k);
-      if (!e) m.set(k, { name: t.payee, type: t.type, categoryId: t.categoryId, accountId: t.accountId, toAccountId: t.toAccountId, amount: t.amount, purpose: t.purpose, importance: t.importance, count: 1 });
+      if (!e) m.set(k, { name: t.payee, type: t.type, categoryId: t.categoryId, amount: t.amount, purpose: t.purpose, importance: t.importance, count: 1 });
       else e.count++;
     }
     return m;
@@ -212,29 +180,10 @@ const Q = (() => {
     const t = {
       plannedIncome: U.sum(income, r => r.planned), actualIncome: agg.income,
       plannedExpense: U.sum(expense, r => r.planned), actualExpense: agg.expense,
-      plannedSavings: plan.savings || 0, actualSaved: agg.saved,
+      plannedSavings: plan.savings || 0, actualSaved: agg.income - agg.expense,
     };
     t.unassigned = t.plannedIncome - t.plannedExpense - t.plannedSavings;
     return { income, expense, totals: t, hasPlan: !!Q.planKey(month), explicit: !!S.state.budgets[month] };
-  });
-
-  /* ---------- goals ---------- */
-  Q.goalInfo = g => cached('g:' + g.id, () => {
-    const sign = t => (t.toAccountId === g.accountId ? t.amount : -t.amount);
-    const txs = S.state.transactions.filter(t => t.goalId === g.id);
-    const today = U.today(), from = U.addDays(today, -90);
-    const saved = (g.initial || 0) + U.sum(txs, sign), target = g.target || 0;
-    const remaining = Math.max(0, target - saved);
-    const done = target > 0 && saved >= target;
-    const avg = Math.max(0, Math.round(U.sum(txs.filter(t => t.date >= from && t.date <= today), sign) / 3));
-    let monthsLeft = null, need = null, status = done ? 'done' : 'open';
-    if (!done && g.deadline) {
-      monthsLeft = Math.max(0, U.diffMonths(U.curMonth(), g.deadline.slice(0, 7)));
-      need = Math.ceil(remaining / Math.max(1, monthsLeft));
-      status = g.deadline < today ? 'overdue' : (avg >= need ? 'ontrack' : 'behind');
-    }
-    const eta = !done && avg > 0 ? U.addMonths(today, Math.ceil(remaining / avg)) : null;
-    return { saved, target, remaining, pct: target ? U.clamp(saved / target, 0, 1) : 0, done, avg, monthsLeft, need, eta, status, count: txs.length };
   });
 
   /* ---------- scheduled / recurring ---------- */
@@ -274,7 +223,6 @@ const Q = (() => {
     if (!arr.length) return Q.month(cm).expense;
     return Math.round(U.sum(arr) / arr.length);
   };
-  Q.savingsBalance = () => U.sum(S.state.accounts.filter(a => Q.accType(a).saving), a => Q.balance(a.id));
 
   Q.health = month => cached('health:' + month, () => {
     const a = Q.month(month), set = S.state.settings;
@@ -292,8 +240,8 @@ const Q = (() => {
     }
     const avgExp = Q.avgMonthlyExpense();
     if (avgExp > 0) {
-      const months = Q.savingsBalance() / avgExp;
-      parts.push({ key: 'fund', label: t('Emergency cushion'), w: 30, score: U.clamp(months / set.emergencyMonths, 0, 1), detail: t('Savings cover {months} months (target {target})', { months: Math.max(0, months).toFixed(1), target: set.emergencyMonths }) });
+      const months = Q.balance() / avgExp;
+      parts.push({ key: 'fund', label: t('Emergency cushion'), w: 30, score: U.clamp(months / set.emergencyMonths, 0, 1), detail: t('Your balance covers {months} months (target {target})', { months: Math.max(0, months).toFixed(1), target: set.emergencyMonths }) });
     }
     if (!parts.length) return null;
     const wsum = U.sum(parts, p => p.w), score = Math.round(100 * U.sum(parts, p => p.w * p.score) / wsum);
@@ -348,15 +296,6 @@ const Q = (() => {
     if (soon.length) out.push({ kind: 'info', icon: 'calendar', title: t('Due in the next 7 days: {n}', { n: U.plural(soon.length, 'bill') }),
       text: t('{amount} in total: {names}.', { amount: $(U.sum(soon, u => u.r.amount)), names: soon.slice(0, 3).map(u => u.r.name).join(sep) }), href: '#/scheduled' });
 
-    for (const g of S.state.goals) {
-      const gi = Q.goalInfo(g);
-      if (gi.status === 'behind' || gi.status === 'overdue') {
-        out.push(gi.status === 'overdue'
-          ? { kind: 'warn', icon: 'target', title: t('{name} is past its target date', { name: g.name }), text: t('{amount} still to go.', { amount: $(gi.remaining) }), href: '#/goals' }
-          : { kind: 'warn', icon: 'target', title: t('{name} is behind schedule', { name: g.name }), text: t('Needs {amount} a month to finish by {date}.', { amount: $(gi.need), date: U.fmtDate(g.deadline, 'med') }), href: '#/goals' });
-        break;
-      }
-    }
     const rank = { bad: 0, warn: 1, info: 2, good: 3 };
     return out.sort((x, y) => rank[x.kind] - rank[y.kind]).slice(0, 5);
   });
@@ -401,9 +340,9 @@ const Q = (() => {
     for (const x of list) {
       const k = keyOf(x.date);
       let g = map.get(k);
-      if (!g) { const [from, to] = Q.periodRange(kind, kind === 'month' ? k + '-01' : k); g = { key: k, kind, from, to, label: Q.periodLabel(kind, kind === 'month' ? k + '-01' : k), income: 0, expense: 0, transfers: 0, count: 0, items: [] }; map.set(k, g); }
+      if (!g) { const [from, to] = Q.periodRange(kind, kind === 'month' ? k + '-01' : k); g = { key: k, kind, from, to, label: Q.periodLabel(kind, kind === 'month' ? k + '-01' : k), income: 0, expense: 0, count: 0, items: [] }; map.set(k, g); }
       g.items.push(x); g.count++;
-      if (x.type === 'income') g.income += x.amount; else if (x.type === 'expense') g.expense += x.amount; else g.transfers += x.amount;
+      if (x.type === 'income') g.income += x.amount; else g.expense += x.amount;
     }
     const groups = [...map.values()].sort((a, b) => (order === 'old' ? (a.key < b.key ? -1 : 1) : (a.key < b.key ? 1 : -1)));
     for (const g of groups) {
@@ -453,16 +392,6 @@ const Q = (() => {
 
   /* ---------- ready-made plans ---------- */
   /* ---------- printable statement ---------- */
-  /** Per account over an inclusive range: opening balance, money in, money out and closing balance. Transfers count on both accounts. */
-  Q.movements = (from, to) => cached(`mv:${from}:${to}`, () => {
-    const open = Q.balances(U.addDays(from, -1)), close = Q.balances(to);
-    const m = new Map(S.state.accounts.map(a => [a.id, { acc: a, opening: open.get(a.id) || 0, closing: close.get(a.id) || 0, in: 0, out: 0 }]));
-    for (const x of S.state.transactions) {
-      if (x.date < from || x.date > to) continue;
-      for (const [id, d] of Q.legs(x)) { const r = m.get(id); if (r) { if (d > 0) r.in += d; else r.out -= d; } }
-    }
-    return [...m.values()].filter(r => !r.acc.archived || r.in || r.out || r.opening || r.closing);
-  });
   /** How a statement for [from, to] is split into rows: 'day', 'week' or 'month' (null for a single day). */
   Q.statementGrain = (from, to) => { const n = U.diffDays(from, to) + 1; return n <= 1 ? null : n <= 14 ? 'day' : n <= 70 ? 'week' : 'month'; };
   /** Everything a printed statement shows for the inclusive range [from, to], as plain data. */
@@ -478,9 +407,8 @@ const Q = (() => {
         cur = U.addDays(end, 1);
       }
     }
-    let i = 0, incomeCount = 0, expenseCount = 0, transferCount = 0, transferTotal = 0;
+    let i = 0, incomeCount = 0, expenseCount = 0;
     for (const x of items) {
-      if (x.type === 'transfer') { transferCount++; transferTotal += x.amount; continue; }
       if (x.type === 'income') incomeCount++; else expenseCount++;
       if (!rows.length) continue;
       while (rows[i].to < x.date) i++;
@@ -493,9 +421,9 @@ const Q = (() => {
     return {
       from, to, days: U.diffDays(from, to) + 1, grain, rows,
       income: agg.income, expense: agg.expense, net, rate: agg.income ? net / agg.income : null,
-      opening: U.sum([...Q.balances(U.addDays(from, -1)).values()]), closing: U.sum([...Q.balances(to).values()]),
+      opening: Q.balance(U.addDays(from, -1)), closing: Q.balance(to),
       incomeCats: cats(agg.inc, agg.income), expenseCats: cats(agg.exp, agg.expense),
-      accounts: Q.movements(from, to), items, incomeCount, expenseCount, transferCount, transferTotal,
+      items, incomeCount, expenseCount,
     };
   });
   Q.catName = c => !c ? t('Uncategorized') : (c.sys ? t(c.name) : c.name);
