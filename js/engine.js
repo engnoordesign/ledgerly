@@ -392,39 +392,12 @@ const Q = (() => {
 
   /* ---------- ready-made plans ---------- */
   /* ---------- printable statement ---------- */
-  /** How a statement for [from, to] is split into rows: 'day', 'week' or 'month' (null for a single day). */
-  Q.statementGrain = (from, to) => { const n = U.diffDays(from, to) + 1; return n <= 1 ? null : n <= 14 ? 'day' : n <= 70 ? 'week' : 'month'; };
-  /** Everything a printed statement shows for the inclusive range [from, to], as plain data. */
+  /** Everything a printed statement shows for the inclusive range [from, to]: the entries (oldest first) and their totals. */
   Q.statement = (from, to) => cached(`stmt:${from}:${to}`, () => {
-    const agg = Q.range(from, to), grain = Q.statementGrain(from, to), ws = S.state.settings.weekStart;
-    const items = Q.filter({ from, to }).reverse();   // oldest first
-    const rows = [];
-    if (grain) {
-      for (let cur = from; cur <= to;) {
-        let end = grain === 'day' ? cur : grain === 'week' ? U.addDays(U.weekStart(cur, ws), 6) : U.monthEnd(cur.slice(0, 7));
-        if (end > to) end = to;
-        rows.push({ from: cur, to: end, income: 0, expense: 0, count: 0 });
-        cur = U.addDays(end, 1);
-      }
-    }
-    let i = 0, incomeCount = 0, expenseCount = 0;
-    for (const x of items) {
-      if (x.type === 'income') incomeCount++; else expenseCount++;
-      if (!rows.length) continue;
-      while (rows[i].to < x.date) i++;
-      rows[i].count++;
-      rows[i][x.type] += x.amount;
-    }
-    for (const r of rows) r.net = r.income - r.expense;
-    const cats = (map, total) => Q.topCats(map, 1e6).map(r => ({ cat: r.cat, value: r.value, pct: total ? r.value / total : 0 }));
-    const net = agg.income - agg.expense;
-    return {
-      from, to, days: U.diffDays(from, to) + 1, grain, rows,
-      income: agg.income, expense: agg.expense, net, rate: agg.income ? net / agg.income : null,
-      opening: Q.balance(U.addDays(from, -1)), closing: Q.balance(to),
-      incomeCats: cats(agg.inc, agg.income), expenseCats: cats(agg.exp, agg.expense),
-      items, incomeCount, expenseCount,
-    };
+    const agg = Q.range(from, to), items = Q.filter({ from, to }).reverse();   // oldest first
+    let incomeCount = 0, expenseCount = 0;
+    for (const x of items) if (x.type === 'income') incomeCount++; else expenseCount++;
+    return { from, to, days: U.diffDays(from, to) + 1, income: agg.income, expense: agg.expense, net: agg.income - agg.expense, items, incomeCount, expenseCount };
   });
   Q.catName = c => !c ? t('Uncategorized') : (c.sys ? t(c.name) : c.name);
   Q.plans = () => [

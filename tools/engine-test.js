@@ -292,7 +292,7 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
   ok(po.rows.length === 2 && po.rows.every(r => r.type !== 'transfer') && po.errors.length === 1, 'an old export imports its income and expenses and skips its transfers');
 }
 
-/* ---- printable statement ---- */
+/* ---- printable statement: header info and the transactions ---- */
 {
   run(`S.version++`);
   const checks = JSON.parse(run(`(() => {
@@ -301,52 +301,32 @@ run(`S.state.settings.lang = 'en'; S.applySettings();`);
       day: Q.periodRange('day', U.addDays(today, -1)),
       week: Q.periodRange('week', U.addDays(today, -9)),
       month: Q.periodRange('month', U.addMonths(today, -2, 1)),
-      year: Q.periodRange('year', today),   // ends in the future: still reconciles
+      year: Q.periodRange('year', today),   // ends in the future
       custom: [U.addDays(today, -100), U.addDays(today, -3)],
       empty: ['2001-03-01', '2001-03-31'],
     };
     for (const [name, [from, to]] of Object.entries(spans)) {
-      const d = Q.statement(from, to), r = {};
-      r.name = name; r.grain = d.grain;
-      r.reconciles = d.opening + d.income - d.expense === d.closing;
-      r.net = d.net === d.income - d.expense;
-      r.rowsSum = !d.rows.length || (U.sum(d.rows, x => x.income) === d.income && U.sum(d.rows, x => x.expense) === d.expense);
-      r.rowsCover = !d.rows.length || (d.rows[0].from === from && d.rows[d.rows.length - 1].to === to && d.rows.every((x, i) => !i || U.addDays(d.rows[i - 1].to, 1) === x.from));
-      r.rowCount = !d.rows.length || U.sum(d.rows, x => x.count) === d.incomeCount + d.expenseCount;
-      r.catsSum = U.sum(d.incomeCats, x => x.value) === d.income && U.sum(d.expenseCats, x => x.value) === d.expense;
-      r.pct = !d.expense || Math.abs(U.sum(d.expenseCats, x => x.pct) - 1) < 1e-9;
+      const d = Q.statement(from, to), r = {}, range = Q.range(from, to);
+      r.name = name;
+      r.totals = d.income === range.income && d.expense === range.expense && d.net === d.income - d.expense;
       r.items = d.items.every((x, i) => x.date >= from && x.date <= to && (!i || d.items[i - 1].date <= x.date));
-      r.counts = d.incomeCount + d.expenseCount === d.items.length;
-      r.sameAsRange = d.income === Q.range(from, to).income && d.expense === Q.range(from, to).expense;
-      r.n = d.items.length; r.income = d.income; r.days = d.days; r.rows = d.rows.length;
+      r.sums = U.sum(d.items.filter(x => x.type === 'income'), x => x.amount) === d.income && U.sum(d.items.filter(x => x.type === 'expense'), x => x.amount) === d.expense;
+      r.counts = d.incomeCount + d.expenseCount === d.items.length && d.items.length === Q.filter({ from, to }).length;
+      r.n = d.items.length; r.income = d.income; r.days = d.days;
       out.push(r);
     }
     return JSON.stringify(out);
   })()`));
   for (const r of checks) {
-    ok(r.reconciles, `${r.name}: opening + income - expenses = closing`);
-    ok(r.net && r.sameAsRange, `${r.name}: totals match the statistics engine`);
-    ok(r.rowsSum && r.rowsCover && r.rowCount, `${r.name}: the day/week/month rows cover the period exactly and add up to the totals`);
-    ok(r.catsSum && r.pct, `${r.name}: category totals add up to the income and expense totals`);
-    ok(r.items && r.counts, `${r.name}: transactions are inside the period, oldest first, and counted once`);
+    ok(r.totals, `${r.name}: the totals match the statistics engine`);
+    ok(r.items, `${r.name}: transactions are inside the period and oldest first`);
+    ok(r.sums && r.counts, `${r.name}: the listed transactions add up to the totals and are counted once`);
   }
   const by = Object.fromEntries(checks.map(r => [r.name, r]));
-  eq(by.day.grain, null, 'a one-day statement has no breakdown rows');
-  eq(by.week.grain, 'day', 'a week is broken down by day');
-  eq(by.month.grain, 'week', 'a month is broken down by week');
-  eq(by.year.grain, 'month', 'a year is broken down by month');
-  eq(by.year.rows, 12, 'a year has twelve month rows');
-  eq(by.week.rows, 7, 'a week has seven day rows');
   ok(by.month.n > 0 && by.year.n > by.month.n && by.year.income > 0, 'the demo months and year hold real entries');
+  eq(by.day.days, 1, 'a one-day statement spans one day');
+  eq(by.week.days, 7, 'a week spans seven days');
   eq(by.empty.n + by.empty.income, 0, 'a period with nothing in it is empty, not an error');
-  eq(run(`Q.statementGrain('2026-01-01', '2026-03-01')`), 'week', '60 days are shown by week');
-  eq(run(`Q.statementGrain('2026-01-01', '2026-04-15')`), 'month', 'over 70 days are shown by month');
-  // weeks follow the configured first day of the week, and the first/last rows are clipped to the period
-  run(`S.state.settings.weekStart = 6; S.version++;`);
-  const wk = JSON.parse(run(`(() => { const d = Q.statement(U.addDays(U.today(), -45), U.addDays(U.today(), -3));
-    return JSON.stringify({ inner: d.rows.slice(1).every(r => U.parse(r.from).getDay() === 6), n: d.rows.length, rec: d.opening + d.income - d.expense === d.closing }); })()`));
-  ok(wk.inner && wk.n >= 6 && wk.rec, 'week rows start on Saturday when that is the week start');
-  run(`S.state.settings.weekStart = 1; S.version++;`);
   // the view script parses (it needs a browser to run, so only its syntax is checked here)
   let parsed = true; try { new vm.Script(fs.readFileSync(path.join(root, 'js', 'views', 'statement.js'), 'utf8')); } catch (e) { parsed = false; }
   ok(parsed, 'js/views/statement.js is valid JavaScript');
